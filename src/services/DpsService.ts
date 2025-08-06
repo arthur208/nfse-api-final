@@ -4,7 +4,8 @@ import { NfsInputDto } from '../dtos/NfsInputDto';
 import { formatInTimeZone } from 'date-fns-tz';
 
 export class DpsService {
-  public buildUnsignedXml(data: NfsInputDto): string {
+  // A função agora aceita o ambiente como um argumento
+  public buildUnsignedXml(data: NfsInputDto, ambiente: '1' | '2'): string {
     const cnpjPrestadorLimpo = data.prestador.cnpj.replace(/\D/g, '');
     const idDps = `DPS${data.prestador.codigoMunicipio}2${cnpjPrestadorLimpo.padStart(14, '0')}${data.dps.serie.padStart(5, '0')}${data.dps.numero.toString().padStart(15, '0')}`;
     const dhEmiFormatada = formatInTimeZone(new Date(), 'America/Sao_Paulo', "yyyy-MM-dd'T'HH:mm:ssXXX");
@@ -15,7 +16,9 @@ export class DpsService {
     });
     
     const infDPS = root.ele('infDPS', { Id: idDps });
-    infDPS.ele('tpAmb').txt('2');
+    // *** A MUDANÇA ESTÁ AQUI ***
+    infDPS.ele('tpAmb').txt(ambiente); // Usa o ambiente recebido (1 ou 2)
+
     infDPS.ele('dhEmi').txt(dhEmiFormatada);
     infDPS.ele('verAplic').txt('OpenAC.NFSe.Nacional');
     infDPS.ele('serie').txt(data.dps.serie);

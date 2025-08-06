@@ -2,6 +2,7 @@
 import express, { Application } from 'express';
 import path from 'path';
 import fs from 'fs';
+import pem from 'pem';
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import nfseRoutes from './routes/NfseRoutes';
@@ -12,25 +13,36 @@ import { XmlSigningService } from './services/XmlSigningService';
 
 const PORT = process.env.PORT || 3000;
 
+// Função que usa 'pem' para extrair a chave e o certificado, encapsulada em uma Promise
+function readCertificate(pfxPath: string, pfxPassword: string): Promise<{ key: string, cert: string }> {
+  return new Promise((resolve, reject) => {
+    fs.readFile(pfxPath, (err, pfxBuffer) => {
+      if (err) {
+        return reject(new Error(`Falha ao ler o arquivo PFX em '${pfxPath}': ${err.message}`));
+      }
+      pem.readPkcs12(pfxBuffer, { p12Password: pfxPassword }, (err, cert) => {
+        if (err || !cert || !cert.key) {
+          return reject(new Error(`Falha ao extrair a chave privada do PFX. Verifique se a senha está correta. Erro original: ${err}`));
+        }
+        resolve({ key: cert.key, cert: cert.cert });
+      });
+    });
+  });
+}
+
 async function startServer(): Promise<void> {
   try {
-    const keyPath = path.join(__dirname, '..', 'certs', 'chave_privada.pem');
-    const certPath = path.join(__dirname, '..', 'certs', 'certificado.pem');
+    const certPassword = '884157';
+    const certPath = path.join(__dirname, '..', 'certs', 'seu_certificado.pfx');
     
-    console.log("Carregando chave privada e certificado PEM...");
-    // Lê os arquivos de texto simples
-    const privateKeyPem = fs.readFileSync(keyPath, 'utf-8');
-    const certificatePem = fs.readFileSync(certPath, 'utf-8');
-    console.log("Chave e certificado carregados com sucesso.");
-
-    const govApiService = new GovApiService();
-    // Inicializa o serviço com os arquivos de texto
-    govApiService.initialize(privateKeyPem, certificatePem);
+    console.log("Extraindo chave e certificado do arquivo PFX...");
+    const { key: privateKeyPem, cert: certificatePem } = await readCertificate(certPath, certPassword);
+    console.log("Chave privada e certificado extraídos com sucesso.");
 
     const dpsService = new DpsService();
     const signingService = new XmlSigningService();
-    // Injeta a chave e o certificado no controller
-    const nfseController = new NfseController(dpsService, govApiService, signingService, privateKeyPem, certificatePem);
+    // Injeta a chave e o certificado extraídos no controller
+    const nfseController = new NfseController(dpsService, signingService, privateKeyPem, certificatePem, certPath, certPassword);
 
     const app: Application = express();
     app.use(express.json());
@@ -44,10 +56,14 @@ async function startServer(): Promise<void> {
     app.use('/', nfseRoutes(nfseController));
 
     app.listen(PORT, () => console.log(`\nServidor rodando em http://localhost:${PORT}`));
-  } catch (error: any) {
-    console.error("\n[ERRO FATAL NA INICIALIZAÇÃO DA APLICAÇÃO]", error);
-    process.exit(1);
+
+  } catch (error) {
+    console.error("\n[ERRO FATAL NA INICIALIZAÇÃO DA APLICAÇÃO]");
+    throw error;
   }
 }
 
-startServer();
+startServer().catch(error => {
+  console.error("Causa:", error.message);
+  process.exit(1);
+});

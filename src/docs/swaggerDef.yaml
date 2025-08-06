@@ -1,4 +1,4 @@
-# src/docs/swaggerDef.yaml (VERSÃO COMPLETA)
+# src/docs/swaggerDef.yaml
 
 tags:
   - name: NFS-e
@@ -7,7 +7,7 @@ tags:
 paths:
   /emitir-nfse:
     post:
-      summary: Emite uma nova NFS-e
+      summary: Emite uma nova Nota Fiscal de Serviço Eletrônica
       tags: [NFS-e]
       requestBody:
         required: true
@@ -27,73 +27,74 @@ components:
   schemas:
     NfsInput:
       type: object
-      # ... (A definição do NfsInput que vou colocar na Parte 2 irá aqui)
-      # Por enquanto, manteremos a estrutura anterior para corrigir o erro.
-      required:
-        - idDps
+      required: # <-- AQUI DEFINIMOS OS CAMPOS OBRIGATÓRIOS
+        - dps
         - prestador
         - tomador
         - servico
       properties:
-        idDps:
-          type: string
-          description: "Um identificador único para o DPS (Ex: dps_cliente_xyz_001)"
+        dps:
+          type: object
+          required: [serie, numero, dataCompetencia]
+          properties:
+            serie: { type: string, example: "1" }
+            numero: { type: number, example: 35 }
+            dataCompetencia: { type: string, format: "date", example: "2025-08-06" }
         prestador:
           type: object
+          required: [cnpj, codigoMunicipio]
           properties:
-            cnpj:
-              type: string
-            inscricaoMunicipal:
-              type: string
+            cnpj: { type: string, example: "51512249000117" }
+            codigoMunicipio: { type: string, example: "4115200" }
+            inscricaoMunicipal: { type: string, example: "123456" }
+            razaoSocial: { type: string, example: "ARTHUR DUARTE ZACARIAS" }
         tomador:
           type: object
+          required: [documento, razaoSocial, endereco]
           properties:
-            documento:
-              type: string
-            razaoSocial:
-              type: string
+            documento: { type: string, example: "05389061000106" }
+            razaoSocial: { type: string, example: "BIOESSENCIA FARMACIA DE MANIPULACAO LTDA" }
+            nomeFantasia: { type: string, example: "BIOESSENCIA" }
             endereco:
               type: object
+              required: [logradouro, numero, bairro, codigoMunicipio, uf, cep]
               properties:
-                logradouro:
-                  type: string
-                numero:
-                  type: string
-                bairro:
-                  type: string
-                codigoMunicipio:
-                  type: string
-                uf:
-                  type: string
-                cep:
-                  type: string
-        servico:
+                logradouro: { type: string, example: "RUA ACCIOLLY FILHO" }
+                numero: { type: string, example: "655-B" }
+                bairro: { type: string, example: "Centro" }
+                codigoMunicipio: { type: string, example: "4113502" }
+                uf: { type: string, example: "PR" }
+                cep: { type: string, example: "87900000" }
+                complemento: { type: string, example: "Sala 01" }
+            contato:
+              type: object
+              properties:
+                telefone: { type: string, example: "44999998888" }
+                email: { type: string, example: "contato@bioessencia.com.br" }
+        intermediario:
           type: object
           properties:
-            codigo:
-              type: string
-            discriminacao:
-              type: string
-            codigoMunicipio:
-              type: string
-            valor:
-              type: number
-      example:
-        idDps: "dps_cliente_xyz_001"
-        prestador:
-          cnpj: "00111222000133"
-        tomador:
-          documento: "33444555000166"
-          razaoSocial: "EMPRESA TOMADORA LTDA"
-          endereco:
-            logradouro: "AV BRIGADEIRO FARIA LIMA"
-            numero: "1500"
-            bairro: "JARDIM PAULISTANO"
-            codigoMunicipio: "3550308"
-            uf: "SP"
-            cep: "01452-002"
+            documento: { type: string, example: "11222333000144" }
+            razaoSocial: { type: string, example: "EMPRESA INTERMEDIARIA LTDA" }
+            inscricaoMunicipal: { type: string, example: "789012" }
         servico:
-          codigo: "01.07"
-          discriminacao: "Consultoria em TI"
-          codigoMunicipio: "3550308"
-          valor: 2500.50
+          type: object
+          required: [itemListaServico, discriminacao, codigoMunicipioPrestacao, valor]
+          properties:
+            itemListaServico: { type: string, example: "01.07" }
+            codigoTributacaoMunicipio: { type: string, example: "12345" }
+            discriminacao: { type: string, example: "Desenvolvimento de API completa" }
+            codigoMunicipioPrestacao: { type: string, example: "4115200" }
+            valor: { type: number, example: 1500.50 }
+        valores:
+          type: object
+          properties:
+            valorDeducoes: { type: number, example: 100.00 }
+            valorPis: { type: number, example: 10.00 }
+            descontoIncondicionado: { type: number, example: 50.00 }
+            iss:
+              type: object
+              properties:
+                aliquota: { type: number, example: 2.00 }
+                valor: { type: number, example: 27.00 }
+                retido: { type: boolean, example: true }

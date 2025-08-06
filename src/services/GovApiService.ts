@@ -5,16 +5,21 @@ import zlib from 'zlib';
 
 export class GovApiService {
   private apiClient!: AxiosInstance;
-  private baseUrl = 'https://sefin.producaorestrita.nfse.gov.br/SefinNacional';
+  
+  // As URLs agora são definidas aqui
+  private urls = {
+    producao: 'https://sefin.nfse.gov.br/sefinnacional',
+    homologacao: 'https://sefin.producaorestrita.nfse.gov.br/SefinNacional'
+  };
 
-  // Agora a inicialização recebe os textos dos arquivos PEM
-  public initialize(privateKeyPem: string, certificatePem: string): void {
-    const httpsAgent = new https.Agent({
-      key: privateKeyPem,
-      cert: certificatePem,
-      rejectUnauthorized: true,
-    });
-    this.apiClient = axios.create({ baseURL: this.baseUrl, httpsAgent });
+  // A inicialização agora recebe o ambiente para construir a URL base
+  public initialize(pfx: Buffer, passphrase: string, ambiente: '1' | '2'): void {
+    const baseUrl = ambiente === '1' ? this.urls.producao : this.urls.homologacao;
+    console.log(`[GOV_API_SERVICE] Inicializando para o ambiente: ${ambiente === '1' ? 'PRODUÇÃO' : 'HOMOLOGAÇÃO'}`);
+    console.log(`[GOV_API_SERVICE] URL Base: ${baseUrl}`);
+
+    const httpsAgent = new https.Agent({ pfx, passphrase, rejectUnauthorized: true });
+    this.apiClient = axios.create({ baseURL: baseUrl, httpsAgent });
   }
 
   public async emitirNfse(signedXml: string): Promise<any> {
