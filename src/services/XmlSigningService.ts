@@ -14,7 +14,7 @@ export class XmlSigningService {
 
     // Adicionamos o conteúdo do KeyInfo usando a implementação padrão da biblioteca
     sig.keyInfoProvider = {
-        getKeyInfo: (key, prefix) => {
+        getKeyInfo: (key: string, prefix: string) => {
             return `<${prefix}:X509Data><${prefix}:X509Certificate>${key}</${prefix}:X509Certificate></${prefix}:X509Data>`;
         }
     };

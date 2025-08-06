@@ -15,6 +15,86 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/NfsInput'
+            examples:
+              basica:
+                summary: Requisição com o mínimo de campos obrigatórios
+                value:
+                  dps:
+                    serie: "1"
+                    numero: 36
+                    dataCompetencia: "2025-08-06"
+                  prestador:
+                    cnpj: "51512249000117"
+                    codigoMunicipio: "4115200"
+                  tomador:
+                    documento: "05389061000106"
+                    razaoSocial: "EMPRESA DE TESTE LTDA"
+                    endereco:
+                      logradouro: "AVENIDA PRINCIPAL"
+                      numero: "1234"
+                      bairro: "Centro"
+                      codigoMunicipio: "4113502"
+                      uf: "PR"
+                      cep: "87900000"
+                  servico:
+                    itemListaServico: "01.07"
+                    discriminacao: "Consultoria em tecnologia"
+                    codigoMunicipioPrestacao: "4115200"
+                    valor: 500.00
+              completa:
+                summary: Requisição com todos os campos preenchidos
+                value:
+                  ambiente: "2"
+                  dps:
+                    serie: "1"
+                    numero: 35
+                    dataCompetencia: "2025-08-06"
+                  prestador:
+                    cnpj: "51512249000117"
+                    codigoMunicipio: "4115200"
+                    inscricaoMunicipal: "123456"
+                    razaoSocial: "ARTHUR DUARTE ZACARIAS"
+                  tomador:
+                    documento: "05389061000106"
+                    razaoSocial: "BIOESSENCIA FARMACIA DE MANIPULACAO LTDA"
+                    nomeFantasia: "BIOESSENCIA"
+                    endereco:
+                      logradouro: "RUA ACCIOLLY FILHO"
+                      numero: "655-B"
+                      complemento: "Sala 01"
+                      bairro: "Centro"
+                      codigoMunicipio: "4113502"
+                      uf: "PR"
+                      cep: "87900000"
+                      codigoPais: "1058"
+                      descricaoPais: "BRASIL"
+                    contato:
+                      telefone: "44999998888"
+                      email: "contato@bioessencia.com.br"
+                  intermediario:
+                    documento: "11222333000144"
+                    razaoSocial: "EMPRESA INTERMEDIARIA LTDA"
+                    inscricaoMunicipal: "789012"
+                  servico:
+                    itemListaServico: "01.07"
+                    codigoTributacaoMunicipio: "12345"
+                    discriminacao: "Desenvolvimento de API completa para emissão de NFSe"
+                    codigoMunicipioPrestacao: "4115200"
+                    valor": 1500.50
+                  valores:
+                    valorDeducoes: 100.00
+                    valorPis: 10.00
+                    valorCofins: 15.50
+                    valorInss: 25.00
+                    valorIr: 35.70
+                    valorCsll: 5.25
+                    descontoCondicionado: 0.00
+                    descontoIncondicionado: 50.00
+                    outrasRetencoes: 0.00
+                    iss:
+                      aliquota: 2.00
+                      valor: 27.00
+                      retido: true
       responses:
         '201':
           description: NFS-e emitida com sucesso.
@@ -27,74 +107,95 @@ components:
   schemas:
     NfsInput:
       type: object
-      required: # <-- AQUI DEFINIMOS OS CAMPOS OBRIGATÓRIOS
+      # Definição dos campos continua a mesma, pois a estrutura não muda.
+      # Apenas os exemplos de uso foram separados acima.
+      required:
         - dps
         - prestador
         - tomador
         - servico
       properties:
+        # ... (todas as propriedades definidas na resposta anterior)
+        ambiente:
+          type: string
+          description: "(Opcional) Ambiente de destino: 1 para Produção, 2 para Homologação. Padrão é '2'."
         dps:
           type: object
+          description: "Dados da Declaração de Prestação de Serviço (Obrigatório)"
           required: [serie, numero, dataCompetencia]
           properties:
-            serie: { type: string, example: "1" }
-            numero: { type: number, example: 35 }
-            dataCompetencia: { type: string, format: "date", example: "2025-08-06" }
+            serie: { type: string }
+            numero: { type: number }
+            dataCompetencia: { type: string, format: "date" }
         prestador:
           type: object
+          description: "Dados do Prestador do Serviço (Obrigatório)"
           required: [cnpj, codigoMunicipio]
           properties:
-            cnpj: { type: string, example: "51512249000117" }
-            codigoMunicipio: { type: string, example: "4115200" }
-            inscricaoMunicipal: { type: string, example: "123456" }
-            razaoSocial: { type: string, example: "ARTHUR DUARTE ZACARIAS" }
+            cnpj: { type: string }
+            codigoMunicipio: { type: string }
+            inscricaoMunicipal: { type: string, description: "(Opcional) Inscrição Municipal." }
+            razaoSocial: { type: string, description: "(Opcional) Razão Social." }
         tomador:
           type: object
+          description: "Dados do Tomador do Serviço (Obrigatório)"
           required: [documento, razaoSocial, endereco]
           properties:
-            documento: { type: string, example: "05389061000106" }
-            razaoSocial: { type: string, example: "BIOESSENCIA FARMACIA DE MANIPULACAO LTDA" }
-            nomeFantasia: { type: string, example: "BIOESSENCIA" }
+            documento: { type: string }
+            razaoSocial: { type: string }
+            nomeFantasia: { type: string, description: "(Opcional) Nome Fantasia." }
             endereco:
               type: object
               required: [logradouro, numero, bairro, codigoMunicipio, uf, cep]
               properties:
-                logradouro: { type: string, example: "RUA ACCIOLLY FILHO" }
-                numero: { type: string, example: "655-B" }
-                bairro: { type: string, example: "Centro" }
-                codigoMunicipio: { type: string, example: "4113502" }
-                uf: { type: string, example: "PR" }
-                cep: { type: string, example: "87900000" }
-                complemento: { type: string, example: "Sala 01" }
+                logradouro: { type: string }
+                numero: { type: string }
+                complemento: { type: string, description: "(Opcional) Complemento." }
+                bairro: { type: string }
+                codigoMunicipio: { type: string }
+                uf: { type: string }
+                cep: { type: string }
+                codigoPais: { type: string, description: "(Opcional) Código do país." }
+                descricaoPais: { type: string, description: "(Opcional) Nome do país." }
             contato:
               type: object
+              description: "(Opcional) Contato do tomador."
               properties:
-                telefone: { type: string, example: "44999998888" }
-                email: { type: string, example: "contato@bioessencia.com.br" }
+                telefone: { type: string }
+                email: { type: string }
         intermediario:
           type: object
+          description: "(Opcional) Intermediário do serviço."
           properties:
-            documento: { type: string, example: "11222333000144" }
-            razaoSocial: { type: string, example: "EMPRESA INTERMEDIARIA LTDA" }
-            inscricaoMunicipal: { type: string, example: "789012" }
+            documento: { type: string }
+            razaoSocial: { type: string }
+            inscricaoMunicipal: { type: string }
         servico:
           type: object
+          description: "Detalhes do serviço (Obrigatório)"
           required: [itemListaServico, discriminacao, codigoMunicipioPrestacao, valor]
           properties:
-            itemListaServico: { type: string, example: "01.07" }
-            codigoTributacaoMunicipio: { type: string, example: "12345" }
-            discriminacao: { type: string, example: "Desenvolvimento de API completa" }
-            codigoMunicipioPrestacao: { type: string, example: "4115200" }
-            valor: { type: number, example: 1500.50 }
+            itemListaServico: { type: string }
+            codigoTributacaoMunicipio: { type: string, description: "(Opcional) Código de tributação do município." }
+            discriminacao: { type: string }
+            codigoMunicipioPrestacao: { type: string }
+            valor: { type: number }
         valores:
           type: object
+          description: "(Opcional) Valores e impostos."
           properties:
-            valorDeducoes: { type: number, example: 100.00 }
-            valorPis: { type: number, example: 10.00 }
-            descontoIncondicionado: { type: number, example: 50.00 }
+            valorDeducoes: { type: number }
+            valorPis: { type: number }
+            valorCofins: { type: number }
+            valorInss: { type: number }
+            valorIr: { type: number }
+            valorCsll: { type: number }
+            descontoCondicionado: { type: number }
+            descontoIncondicionado: { type: number }
+            outrasRetencoes: { type: number }
             iss:
               type: object
               properties:
-                aliquota: { type: number, example: 2.00 }
-                valor: { type: number, example: 27.00 }
-                retido: { type: boolean, example: true }
+                aliquota: { type: number }
+                valor: { type: number }
+                retido: { type: boolean }
