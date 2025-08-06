@@ -1,16 +1,18 @@
-// DENTRO DO ARQUIVO src/routes/NfseRoutes.ts
-
+// src/routes/NfseRoutes.ts
 import { Router } from 'express';
 import { NfseController } from '../controllers/NfseController';
 
 export default (nfseController: NfseController) => {
   const router = Router();
   
-  // Rota de emissão existente
+  // Rota para emitir a NFS-e
   router.post('/emitir-nfse', nfseController.emitir);
 
-  // NOVA ROTA PARA CONSULTA
-  router.get('/nfse/:chaveAcesso', nfseController.consultarDanfse);
+  // Rota para consultar os dados (XML/JSON) da NFS-e
+  router.get('/nfse/:chaveAcesso', nfseController.consultar);
+
+  // Rota para consultar o DANFSe (PDF) da NFS-e
+  router.get('/danfse/:chaveAcesso', nfseController.consultarDanfse);
 
   return router;
 };

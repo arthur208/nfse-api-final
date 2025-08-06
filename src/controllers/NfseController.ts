@@ -4,125 +4,148 @@ import { NfsInputDto } from '../dtos/NfsInputDto';
 import { DpsService } from '../services/DpsService';
 import { GovApiService } from '../services/GovApiService';
 import { XmlSigningService } from '../services/XmlSigningService';
-import zlib from 'zlib';
-import fs from 'fs';
-// Importe as configurações no início do arquivo
 import { environments } from '../config/environments';
+import pem from 'pem';
+import zlib from 'zlib';
+import axios from 'axios';
+
+// Função auxiliar para processar o certificado dinamicamente a partir dos headers
+async function processCertificateFromHeaders(req: Request): Promise<{ key: string, cert: string, pfxBuffer: Buffer, pfxPassword: string }> {
+  const pfxBase64 = req.headers['x-pfx-base64'] as string;
+  const pfxPassword = req.headers['x-pfx-password'] as string;
+
+  if (!pfxBase64 || !pfxPassword) {
+    throw { status: 401, message: "Os cabeçalhos 'x-pfx-base64' e 'x-pfx-password' são obrigatórios." };
+  }
+
+  const pfxBuffer = Buffer.from(pfxBase64, 'base64');
+
+  return new Promise((resolve, reject) => {
+    pem.readPkcs12(pfxBuffer, { p12Password: pfxPassword }, (err, cert) => {
+      if (err || !cert || !cert.key) {
+        return reject({ status: 401, message: "Falha ao processar o certificado PFX. Verifique se os dados e a senha estão corretos.", details: err?.message });
+      }
+      resolve({ key: cert.key, cert: cert.cert, pfxBuffer, pfxPassword });
+    });
+  });
+}
 
 export class NfseController {
   constructor(
     private dpsService: DpsService,
-    private signingService: XmlSigningService,
-    private privateKeyPem: string,
-    private certificatePem: string,
-    private pfxPath: string,
-    private pfxPassword: string
+    private signingService: XmlSigningService
   ) {}
   
-  // MÉTODO EMITIR (VERSÃO CORRIGIDA)
   public emitir = async (req: Request, res: Response): Promise<Response> => {
     try {
-      const inputData: NfsInputDto = req.body;
+      const { key, cert, pfxBuffer, pfxPassword } = await processCertificateFromHeaders(req);
       
-      // 1. Define o ambiente: usa o do input ou 'homologacao' como padrão.
+      const inputData: NfsInputDto = req.body;
       const ambiente = inputData.ambiente === '1' ? 'producao' : 'homologacao';
-      console.log(`[CONTROLLER] >> Etapa 1: Emissão iniciada para o ambiente: ${ambiente.toUpperCase()}`);
+      console.log(`[CONTROLLER] >> Emissão iniciada para o ambiente: ${ambiente.toUpperCase()}`);
 
       const unsignedXml = this.dpsService.buildUnsignedXml(inputData, inputData.ambiente || '2');
+      const signedXml = this.signingService.signXml(unsignedXml, key, cert);
       
-      console.log('[CONTROLLER] >> Etapa 2: Assinando o XML...');
-      const signedXml = this.signingService.signXml(unsignedXml, this.privateKeyPem, this.certificatePem);
-      
-      // 2. Seleciona a URL correta do nosso arquivo de configuração
       const baseUrl = environments[ambiente].baseUrl;
-
-      const pfxBuffer = fs.readFileSync(this.pfxPath);
       const govApiService = new GovApiService();
-      
-      // 3. Inicializa o serviço com a URL correta
-      govApiService.initialize(pfxBuffer, this.pfxPassword, baseUrl);
+      govApiService.initialize(pfxBuffer, pfxPassword, baseUrl);
       
       const govResponse = await govApiService.emitirNfse(signedXml);
       return res.status(201).json({ status: 'NFS-e emitida com sucesso!', ...govResponse });
+
     } catch (error: any) {
-      console.error('\n--- [CONTROLLER] ERRO CAPTURADO NA EMISSÃO ---', error);
+      console.error('\n--- [CONTROLLER] ERRO NA EMISSÃO ---', error);
       return res.status(error.status || 500).json({
         message: 'Ocorreu um erro ao processar a emissão.',
-        details: error.details || error.message || error,
+        details: error.details || error.message,
       });
     }
   };
 
-  // O MÉTODO CONSULTAR (permanece igual, com a lógica de fallback)
-    public consultarDanfse = async (req: Request, res: Response): Promise<void> => {
+  public consultar = async (req: Request, res: Response): Promise<Response> => {
     const { chaveAcesso } = req.params;
+    if (!chaveAcesso || chaveAcesso.length !== 50) {
+      return res.status(400).json({ message: 'A chave de acesso é obrigatória e deve conter 50 caracteres.' });
+    }
 
+    try {
+      const { pfxBuffer, pfxPassword } = await processCertificateFromHeaders(req);
+      console.log(`[CONTROLLER] >> Iniciando consulta de NFS-e para a chave: ${chaveAcesso}`);
+      console.log('--- Tentando no ambiente de PRODUÇÃO...');
+      
+      const govApiServiceProd = new GovApiService();
+      govApiServiceProd.initialize(pfxBuffer, pfxPassword, environments.producao.baseUrl);
+      
+      const resultado = await govApiServiceProd.consultarNfse(chaveAcesso);
+      console.log('[CONTROLLER] << Consulta em PRODUÇÃO realizada com sucesso.');
+      return res.status(200).json(resultado);
+
+    } catch (errorProd: any) {
+      if (errorProd.status === 404) {
+        console.log('--- NFS-e não encontrada em PRODUÇÃO. Tentando no ambiente de HOMOLOGAÇÃO...');
+        try {
+          const { pfxBuffer, pfxPassword } = await processCertificateFromHeaders(req);
+          
+          const govApiServiceHomol = new GovApiService();
+          govApiServiceHomol.initialize(pfxBuffer, pfxPassword, environments.homologacao.baseUrl);
+          
+          const resultadoHomol = await govApiServiceHomol.consultarNfse(chaveAcesso);
+          console.log('[CONTROLLER] << Consulta em HOMOLOGAÇÃO realizada com sucesso.');
+          return res.status(200).json(resultadoHomol);
+        } catch (errorHomol: any) {
+          console.error('\n--- [CONTROLLER] ERRO NA CONSULTA (HOMOLOGAÇÃO) ---', errorHomol);
+          return res.status(errorHomol.status || 500).json({ message: 'Erro ao consultar em homologação.', details: errorHomol.details });
+        }
+      }
+      console.error('\n--- [CONTROLLER] ERRO NA CONSULTA (PRODUÇÃO) ---', errorProd);
+      return res.status(errorProd.status || 500).json({ message: 'Erro ao consultar em produção.', details: errorProd.details });
+    }
+  };
+
+  public consultarDanfse = async (req: Request, res: Response): Promise<void> => {
+    const { chaveAcesso } = req.params;
     if (!chaveAcesso || chaveAcesso.length !== 50) {
       res.status(400).json({ message: 'A chave de acesso é obrigatória e deve conter 50 caracteres.' });
       return;
     }
-
-    console.log(`[CONTROLLER] >> Iniciando consulta do DANFSe para a chave: ${chaveAcesso}`);
     
     let resultado: { data: Buffer, headers: any } | null = null;
-
-    // Tenta em Produção
     try {
+      const { pfxBuffer, pfxPassword } = await processCertificateFromHeaders(req);
+      console.log(`[CONTROLLER] >> Iniciando consulta do DANFSe para a chave: ${chaveAcesso}`);
       console.log('--- Tentando DANFSe no ambiente de PRODUÇÃO...');
-      const pfxBuffer = fs.readFileSync(this.pfxPath);
+
       const govApiServiceProd = new GovApiService();
-      govApiServiceProd.initialize(pfxBuffer, this.pfxPassword, environments.producao.baseUrl);
-      
+      govApiServiceProd.initialize(pfxBuffer, pfxPassword, environments.producao.baseUrl);
       resultado = await govApiServiceProd.consultarDanfse(chaveAcesso);
-      console.log(resultado)
+
     } catch (errorProd: any) {
-      if (errorProd.status !== 404) {
-        res.status(errorProd.status || 500).json({
-          message: 'Ocorreu um erro ao consultar o DANFSe em produção.',
-          details: errorProd.details || errorProd.message,
-        });
-        return;
-      }
-      console.log('--- DANFSe não encontrado em PRODUÇÃO.');
-    }
-
-    // Se não encontrou em produção, tenta em Homologação
-    if (!resultado) {
-      try {
-        console.log('--- Tentando DANFSe no ambiente de HOMOLOGAÇÃO...');
-        const pfxBuffer = fs.readFileSync(this.pfxPath);
-        const govApiServiceHomol = new GovApiService();
-        govApiServiceHomol.initialize(pfxBuffer, this.pfxPassword, environments.homologacao.baseUrl);
-        
-        resultado = await govApiServiceHomol.consultarDanfse(chaveAcesso);
-
-      } catch (errorHomol: any) {
-        res.status(errorHomol.status || 500).json({
-          message: 'Ocorreu um erro ao consultar o DANFSe em homologação.',
-          details: errorHomol.details || errorHomol.message,
-        });
+      if (errorProd.status === 404) {
+        console.log('--- DANFSe não encontrado em PRODUÇÃO. Tentando no ambiente de HOMOLOGAÇÃO...');
+        try {
+          const { pfxBuffer, pfxPassword } = await processCertificateFromHeaders(req);
+          
+          const govApiServiceHomol = new GovApiService();
+          govApiServiceHomol.initialize(pfxBuffer, pfxPassword, environments.homologacao.baseUrl);
+          resultado = await govApiServiceHomol.consultarDanfse(chaveAcesso);
+        } catch (errorHomol: any) {
+          res.status(errorHomol.status || 500).json({ message: 'Erro ao consultar DANFSe em homologação.', details: errorHomol.details });
+          return;
+        }
+      } else {
+        res.status(errorProd.status || 500).json({ message: 'Erro ao consultar DANFSe em produção.', details: errorProd.details });
         return;
       }
     }
 
-    // Se, após as duas tentativas, o resultado foi obtido
     if (resultado) {
       console.log('[CONTROLLER] << DANFSe encontrado. Retransmitindo o PDF...');
-
-      // Repassa os cabeçalhos importantes da resposta original para a nova resposta
       res.setHeader('Content-Type', resultado.headers['content-type'] || 'application/pdf');
-      if (resultado.headers['content-disposition']) {
-        res.setHeader('Content-Disposition', resultado.headers['content-disposition']);
-      }
-      if (resultado.headers['content-length']) {
-        res.setHeader('Content-Length', resultado.headers['content-length']);
-      }
-      
-      // Envia o buffer do PDF como corpo da resposta
+      if(resultado.headers['content-disposition']) res.setHeader('Content-Disposition', resultado.headers['content-disposition']);
+      if(resultado.headers['content-length']) res.setHeader('Content-Length', resultado.headers['content-length']);
       res.send(resultado.data);
     } else {
-      // Se não encontrou em nenhum ambiente
-      console.log('[CONTROLLER] << DANFSe não encontrado em nenhum ambiente.');
       res.status(404).json({ message: 'DANFSe não encontrado para a chave de acesso informada.' });
     }
   };

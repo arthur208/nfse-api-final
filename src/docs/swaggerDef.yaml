@@ -2,13 +2,26 @@
 
 tags:
   - name: NFS-e
-    description: Emissão de Nota Fiscal de Serviço eletrônica
+    description: Emissão e consulta de Nota Fiscal de Serviço eletrônica.
 
 paths:
   /emitir-nfse:
     post:
       summary: Emite uma nova Nota Fiscal de Serviço Eletrônica
       tags: [NFS-e]
+      parameters:
+        - name: x-pfx-base64
+          in: header
+          required: true
+          description: Conteúdo do certificado .pfx codificado em Base64.
+          schema:
+            type: string
+        - name: x-pfx-password
+          in: header
+          required: true
+          description: Senha do certificado .pfx.
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -100,25 +113,105 @@ paths:
           description: NFS-e emitida com sucesso.
         '400':
           description: Erro nos dados de entrada ou falha de validação da API do governo.
+        '401':
+          description: Certificado ou senha inválidos.
         '500':
           description: Erro interno do servidor ou na comunicação com a API do governo.
+  
+  /nfse/{chaveAcesso}:
+    get:
+      summary: Consulta os dados de uma NFS-e pela Chave de Acesso
+      tags: [NFS-e]
+      parameters:
+        - name: x-pfx-base64
+          in: header
+          required: true
+          description: Conteúdo do certificado .pfx codificado em Base64.
+          schema:
+            type: string
+        - name: x-pfx-password
+          in: header
+          required: true
+          description: Senha do certificado .pfx.
+          schema:
+            type: string
+        - name: chaveAcesso
+          in: path
+          required: true
+          description: Chave de Acesso de 50 dígitos da NFS-e.
+          schema:
+            type: string
+            example: "3525085151224900011720000000010000000351234567890"
+      responses:
+        '200':
+          description: NFS-e encontrada com sucesso.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tipoAmbiente: { type: integer, example: 2 }
+                  versaoAplicativo: { type: string, example: "1.0.0" }
+                  dataHoraProcessamento: { type: string, format: "date-time" }
+                  chaveAcesso: { type: string }
+                  nfseXmlGZipB64: { type: string, description: "XML da NFS-e, compactado com GZip e codificado em Base64" }
+        '400':
+          description: Chave de acesso inválida.
+        '401':
+          description: Certificado ou senha inválidos.
+        '404':
+          description: Chave de acesso não encontrada.
+
+  /danfse/{chaveAcesso}:
+    get:
+      summary: Consulta e retorna o DANFSe (PDF) de uma NFS-e
+      tags: [NFS-e]
+      parameters:
+        - name: x-pfx-base64
+          in: header
+          required: true
+          description: Conteúdo do certificado .pfx codificado em Base64.
+          schema:
+            type: string
+        - name: x-pfx-password
+          in: header
+          required: true
+          description: Senha do certificado .pfx.
+          schema:
+            type: string
+        - name: chaveAcesso
+          in: path
+          required: true
+          description: Chave de Acesso de 50 dígitos da NFS-e.
+          schema:
+            type: string
+            example: "3525085151224900011720000000010000000351234567890"
+      responses:
+        '200':
+          description: DANFSe retornado com sucesso.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Certificado ou senha inválidos.
+        '404':
+          description: DANFSe não encontrado para a chave de acesso informada.
 
 components:
   schemas:
     NfsInput:
       type: object
-      # Definição dos campos continua a mesma, pois a estrutura não muda.
-      # Apenas os exemplos de uso foram separados acima.
       required:
         - dps
         - prestador
         - tomador
         - servico
       properties:
-        # ... (todas as propriedades definidas na resposta anterior)
         ambiente:
           type: string
-          description: "(Opcional) Ambiente de destino: 1 para Produção, 2 para Homologação. Padrão é '2'."
+          description: "(Opcional) Ambiente: 1 para Produção, 2 para Homologação. Padrão '2'."
         dps:
           type: object
           description: "Dados da Declaração de Prestação de Serviço (Obrigatório)"
@@ -129,7 +222,7 @@ components:
             dataCompetencia: { type: string, format: "date" }
         prestador:
           type: object
-          description: "Dados do Prestador do Serviço (Obrigatório)"
+          description: "Dados do Prestador (Obrigatório)"
           required: [cnpj, codigoMunicipio]
           properties:
             cnpj: { type: string }
@@ -138,7 +231,7 @@ components:
             razaoSocial: { type: string, description: "(Opcional) Razão Social." }
         tomador:
           type: object
-          description: "Dados do Tomador do Serviço (Obrigatório)"
+          description: "Dados do Tomador (Obrigatório)"
           required: [documento, razaoSocial, endereco]
           properties:
             documento: { type: string }
@@ -176,7 +269,7 @@ components:
           required: [itemListaServico, discriminacao, codigoMunicipioPrestacao, valor]
           properties:
             itemListaServico: { type: string }
-            codigoTributacaoMunicipio: { type: string, description: "(Opcional) Código de tributação do município." }
+            codigoTributacaoMunicipio: { type: string, description: "(Opcional) Código de tributação." }
             discriminacao: { type: string }
             codigoMunicipioPrestacao: { type: string }
             valor: { type: number }
@@ -199,33 +292,3 @@ components:
                 aliquota: { type: number }
                 valor: { type: number }
                 retido: { type: boolean }
-/nfse/{chaveAcesso}:
-    get:
-      summary: Consulta uma NFS-e pela sua Chave de Acesso
-      tags: [NFS-e]
-      parameters:
-        - name: chaveAcesso
-          in: path
-          required: true
-          description: Chave de Acesso de 50 dígitos da NFS-e a ser consultada.
-          schema:
-            type: string
-            example: "3525085151224900011720000000010000000351234567890"
-      responses:
-        '200':
-          description: NFS-e encontrada com sucesso.
-          content:
-            application/json:
-              schema:
-                # Baseado no swagger.json oficial (NFSeGetResponseSucesso)
-                type: object
-                properties:
-                  tipoAmbiente: { type: integer, example: 2 }
-                  versaoAplicativo: { type: string, example: "1.0.0" }
-                  dataHoraProcessamento: { type: string, format: "date-time" }
-                  chaveAcesso: { type: string }
-                  nfseXmlGZipB64: { type: string, description: "XML da NFS-e, compactado com GZip e codificado em Base64" }
-        '400':
-          description: Chave de acesso inválida.
-        '404':
-          description: Chave de acesso não encontrada.
