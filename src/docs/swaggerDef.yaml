@@ -199,3 +199,33 @@ components:
                 aliquota: { type: number }
                 valor: { type: number }
                 retido: { type: boolean }
+/nfse/{chaveAcesso}:
+    get:
+      summary: Consulta uma NFS-e pela sua Chave de Acesso
+      tags: [NFS-e]
+      parameters:
+        - name: chaveAcesso
+          in: path
+          required: true
+          description: Chave de Acesso de 50 dígitos da NFS-e a ser consultada.
+          schema:
+            type: string
+            example: "3525085151224900011720000000010000000351234567890"
+      responses:
+        '200':
+          description: NFS-e encontrada com sucesso.
+          content:
+            application/json:
+              schema:
+                # Baseado no swagger.json oficial (NFSeGetResponseSucesso)
+                type: object
+                properties:
+                  tipoAmbiente: { type: integer, example: 2 }
+                  versaoAplicativo: { type: string, example: "1.0.0" }
+                  dataHoraProcessamento: { type: string, format: "date-time" }
+                  chaveAcesso: { type: string }
+                  nfseXmlGZipB64: { type: string, description: "XML da NFS-e, compactado com GZip e codificado em Base64" }
+        '400':
+          description: Chave de acesso inválida.
+        '404':
+          description: Chave de acesso não encontrada.

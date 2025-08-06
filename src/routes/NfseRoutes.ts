@@ -1,4 +1,4 @@
-// src/routes/NfseRoutes.ts (VERSÃO 100% LIMPA)
+// DENTRO DO ARQUIVO src/routes/NfseRoutes.ts
 
 import { Router } from 'express';
 import { NfseController } from '../controllers/NfseController';
@@ -6,8 +6,11 @@ import { NfseController } from '../controllers/NfseController';
 export default (nfseController: NfseController) => {
   const router = Router();
   
-  // A rota está aqui, mas a documentação dela está agora no arquivo .yaml
+  // Rota de emissão existente
   router.post('/emitir-nfse', nfseController.emitir);
+
+  // NOVA ROTA PARA CONSULTA
+  router.get('/nfse/:chaveAcesso', nfseController.consultarDanfse);
 
   return router;
 };
