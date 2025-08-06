@@ -8,6 +8,8 @@ import { environments } from '../config/environments';
 import pem from 'pem';
 import zlib from 'zlib';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
 
 // Função auxiliar para processar o certificado dinamicamente a partir dos headers
 async function processCertificateFromHeaders(req: Request): Promise<{ key: string, cert: string, pfxBuffer: Buffer, pfxPassword: string }> {
@@ -147,6 +149,32 @@ export class NfseController {
       res.send(resultado.data);
     } else {
       res.status(404).json({ message: 'DANFSe não encontrado para a chave de acesso informada.' });
+    }
+  };
+
+  public gerarXmlDebug = async (req: Request, res: Response): Promise<Response> => {
+    try {
+      const inputData: NfsInputDto = req.body;
+      const ambiente = inputData.ambiente || '2';
+      
+      const unsignedXml = this.dpsService.buildUnsignedXml(inputData, ambiente);
+      
+      const fileName = `dps-debug-${Date.now()}.xml`;
+      const filePath = path.join(process.cwd(), 'debug', fileName);
+      
+      fs.writeFileSync(filePath, unsignedXml);
+
+      return res.status(200).json({
+        message: "Arquivo XML de depuração gerado com sucesso!",
+        filePath: filePath
+      });
+
+    } catch (error: any) {
+      console.error('\n--- [CONTROLLER] ERRO AO GERAR XML DE DEBUG ---', error);
+      return res.status(error.status || 500).json({
+        message: 'Ocorreu um erro ao gerar o XML de depuração.',
+        details: error.details || error.message,
+      });
     }
   };
 }

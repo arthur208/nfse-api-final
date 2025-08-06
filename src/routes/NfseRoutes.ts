@@ -14,5 +14,8 @@ export default (nfseController: NfseController) => {
   // Rota para consultar o DANFSe (PDF) da NFS-e
   router.get('/danfse/:chaveAcesso', nfseController.consultarDanfse);
 
+  // Rota para gerar um XML de depuração
+  router.post('/debug/gerar-xml', nfseController.gerarXmlDebug);
+
   return router;
 };
