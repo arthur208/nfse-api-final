@@ -121,7 +121,85 @@ export interface ExploracaoRodoviaria {
 export interface InformacoesComplementares {
     idDocTecnico?: string;
     docReferenciado?: string;
+    pedido?: string;
+    itemPedido?: string;
     infoAdicional?: string;
+}
+
+// --- NOVAS ESTRUTURAS DA REFORMA TRIBUTÁRIA (IBS/CBS) (v1.01) ---
+
+export interface IbsCbsDestinatario {
+  identificacao: DocumentoFiscal;
+  nomeRazaoSocial?: string;
+  endereco?: Endereco;
+  contato?: Contato;
+}
+
+export interface IbsCbsImovel {
+  inscricaoImobiliaria?: string;
+  codigoCIB?: string;
+  endereco?: Endereco;
+}
+
+export interface IbsCbsDocumentoReembolso {
+  fornecedor?: {
+    identificacao: DocumentoFiscal;
+    nomeRazaoSocial: string;
+  };
+  dataEmissao: string;
+  dataCompetencia: string;
+  tipoReembolso: string;
+  descTipoReembolso?: string;
+  valor: number;
+  documentoFiscalNacional?: {
+    tipoChaveDFe: string;
+    xTipoChaveDFe?: string;
+    chaveDFe: string;
+  };
+  documentoFiscalOutro?: {
+    cMunDocFiscal: string;
+    nDocFiscal: string;
+    xDocFiscal: string;
+  };
+  documentoOutro?: {
+    nDoc: string;
+    xDoc: string;
+  };
+}
+
+export interface IbsCbsTributos {
+  cst: string;
+  cClassTrib: string;
+  cCredPres?: string;
+  tributacaoRegular?: {
+    cstReg: string;
+    cClassTribReg: string;
+  };
+  diferimento?: {
+    pDifUF: number;
+    pDifMun: number;
+    pDifCBS: number;
+  };
+}
+
+export interface IbsCbsValores {
+  reembolsoRepasse?: {
+    documentos: IbsCbsDocumentoReembolso[];
+  };
+  tributos: IbsCbsTributos;
+}
+
+export interface IbsCbs {
+  finalidadeEmissao: string;
+  indicadorConsumoFinal?: string;
+  codigoIndicadorOperacao: string;
+  tipoOperacao?: string;
+  chavesNfseReferenciadas?: string[];
+  tipoEnteGovernamental?: string;
+  indicadorDestinatario: string;
+  destinatario?: IbsCbsDestinatario;
+  imovel?: IbsCbsImovel;
+  valoresIbsCbs: IbsCbsValores;
 }
 
 /**
@@ -226,6 +304,12 @@ export class NfsInputDto {
 
   /** (Opcional) Dados da NFS-e a ser substituída. */
   substituicao?: Substituicao;
+
+  /** Motivo da Emissão da DPS pelo Tomador/Intermediário (Opcional - Sefin v1.01). */
+  motivoEmissaoTomadorIntermediario?: '1' | '2' | '3' | '4';
+
+  /** Chave de Acesso da NFS-e rejeitada pelo Tomador/Intermediário (Opcional - Sefin v1.01). */
+  chaveNfseRejeitada?: string;
 
   /** Informações do Prestador de Serviços. */
   prestador!: {
@@ -346,4 +430,7 @@ export class NfsInputDto {
     /** (Opcional) Totais aproximados de tributos (Lei da Transparência). */
     totaisTributos?: TotaisTributos;
   };
+
+  /** Bloco referente aos impostos da Reforma Tributária (IBS e CBS) - Sefin v1.01. */
+  ibsCbs?: IbsCbs;
 }

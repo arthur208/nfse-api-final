@@ -4,7 +4,9 @@ import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import nfseRoutes from './routes/NfseRoutes';
 import { DpsService } from './services/DpsService';
+import { EventoService } from './services/EventoService';
 import { NfseController } from './controllers/NfseController';
+import { TributacaoController } from './controllers/TributacaoController';
 import { XmlSigningService } from './services/XmlSigningService';
 
 const PORT = process.env.PORT || 3000;
@@ -15,12 +17,12 @@ async function startServer(): Promise<void> {
 
     const dpsService = new DpsService();
     const signingService = new XmlSigningService();
+    const eventoService = new EventoService();
 
-    // Construtor do Controller está mais simples
-    const nfseController = new NfseController(dpsService, signingService);
+    const nfseController = new NfseController(dpsService, signingService, eventoService);
+    const tributacaoController = new TributacaoController(dpsService, signingService);
 
     const app: Application = express();
-    // Aumenta o limite do corpo da requisição para aceitar a string base64 do certificado
     app.use(express.json({ limit: '10mb' })); 
     
     const swaggerOptions = {
@@ -30,7 +32,7 @@ async function startServer(): Promise<void> {
     const swaggerDocs = swaggerJsdoc(swaggerOptions);
     app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-    app.use('/', nfseRoutes(nfseController));
+    app.use('/', nfseRoutes(nfseController, tributacaoController));
 
     app.listen(PORT, () => console.log(`\nServidor rodando em http://localhost:${PORT}`));
 

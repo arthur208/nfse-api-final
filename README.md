@@ -1,195 +1,262 @@
-# API de Emissão de NFS-e 🚀
+<div align="center">
 
-![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
-![Express.js](https://img.shields.io/badge/Express.js-404D59?style=for-the-badge&logo=express&logoColor=white)
+# 🧾 nfse-api-final
 
-## 📝 Descrição
+### Proxy de Emissão de NFS-e — Padrão Nacional Sefin v1.01
 
-Esta é uma API para emissão de Nota Fiscal de Serviço Eletrônica (NFS-e) no padrão nacional. A API foi desenvolvida para facilitar a integração com o sistema da SEFIN, abstraindo a complexidade da geração e assinatura de XMLs.
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Express](https://img.shields.io/badge/Express-5.x-000000?logo=express&logoColor=white)](https://expressjs.com)
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-6BA539?logo=swagger&logoColor=white)](http://localhost:3000/api-docs)
+[![License](https://img.shields.io/badge/Licen%C3%A7a-MIT-green)](LICENSE)
+
+**API REST que abstrai toda a complexidade de comunicação com a Sefin Nacional — emissão, cancelamento e download de NFS-e com assinatura de certificado A1 transparente.**
+
+</div>
+
+---
+
+## 🌟 O que é
+
+O **nfse-api-final** é um microserviço que você coloca entre seu sistema de faturamento e a **Sefin Nacional** (plataforma federal de NFS-e). Em vez de lidar com:
+
+- 📦 Geração de XML da DPS (Declaração do Prestador de Serviço)
+- 🔏 Assinatura digital com certificado A1 (PKCS#12 / PFX)
+- 📡 Comunicação HTTPS mTLS com a Sefin
+- 🧮 Cálculo de IBS, CBS, ISS, PIS/COFINS, IRRF, CSLL
+- 🗜️ Compressão GZIP e codificação Base64
+
+…você simplesmente chama um endpoint REST com os dados básicos do serviço e recebe a NFS-e emitida. 🎯
+
+---
 
 ## ✨ Funcionalidades
 
--   **Emissão de NFS-e:** Envio de dados da nota para emissão.
--   **Consulta de NFS-e:** Consulta de notas emitidas pela chave de acesso.
--   **Consulta de DANFSe:** Obtenção do PDF da nota emitida.
--   **Geração de XML para Debug:** Facilita a verificação dos dados enviados.
--   **Documentação Swagger:** Documentação completa e interativa dos endpoints.
-
-## ⚙️ Pré-requisitos
-
--   [Node.js](https://nodejs.org/en/) (versão 20 ou superior)
--   [npm](https://www.npmjs.com/) (geralmente vem com o Node.js)
--   Um certificado digital A1 (arquivo .pfx)
-
-## 🚀 Instalação
-
-1.  **Clone o repositório:**
-    ```bash
-    git clone <URL_DO_REPOSITORIO>
-    cd nfse-api-final
-    ```
-
-2.  **Instale as dependências:**
-    ```bash
-    npm install
-    ```
-
-3.  **Configure o certificado:**
-    -   Coloque o seu certificado `certificado.pfx` na pasta `certs/`.
-    -   Crie um arquivo `.env` na raiz do projeto e adicione a senha do certificado:
-        ```
-        CERT_PASSWORD=sua_senha_aqui
-        ```
-
-## ▶️ Executando a API
-
-Para iniciar o servidor em modo de desenvolvimento, execute:
-
-```bash
-npm start
-```
-
-A API estará disponível em `http://localhost:3000`.
-
-## 📖 Documentação da API
-
-A documentação completa dos endpoints está disponível no Swagger UI. Após iniciar a API, acesse:
-
-**http://localhost:3000/api-docs**
-
-### Endpoints
+| Feature | Descrição |
+|---|---|
+| 🚀 **Emissão Simplificada** | `POST /nfse/emitir-simples` — Passe só os dados básicos, o sistema calcula os tributos automaticamente |
+| 🔧 **Emissão Completa** | `POST /emitir-nfse` — Controle total sobre todos os campos da DPS |
+| 🧮 **Cálculo de Tributos** | `POST /tributacao/calcular` — Pré-visualize os impostos sem emitir |
+| 🔍 **Consulta** | `GET /nfse/:chave` — Consulte dados de uma NFS-e pelo chave de acesso |
+| 📄 **DANFSe (PDF)** | `GET /danfse/:chave` — Baixe o PDF oficial diretamente da Sefin |
+| ❌ **Cancelamento** | `POST /nfse/:chave/eventos` — Cancele uma NFS-e com Pedido de Registro de Evento |
+| 🔄 **Eventos** | Confirmação, rejeição e cancelamento por substituição |
+| 🐛 **Debug** | `POST /debug/gerar-xml` — Gere o XML sem assinar para validação |
 
 ---
 
-#### `POST /emitir-nfse`
+## 🧠 Detecção Automática de Tributação
 
-Emite uma nova NFS-e.
+No modo simplificado (`/nfse/emitir-simples`), o serviço:
 
-**Exemplo de `curl`:**
+```
+1. Consulta a Receita Federal → detecta o regime (MEI, Simples Nacional, LP/LR)
+2. Consulta o ADN da prefeitura → obtém a alíquota de ISSQN vigente
+3. Calcula PIS/COFINS, IRRF e CSLL conforme o regime detectado
+4. Monta e assina o XML da DPS com o certificado passado no header
+5. Envia à Sefin Nacional e retorna a chave de acesso da NFS-e emitida
+```
+
+---
+
+## 🚀 Quick Start
+
+### Pré-requisitos
+
+- Node.js 18+
+- npm 9+
+- OpenSSL instalado no PATH
+
+### Instalação
 
 ```bash
-curl -X POST http://localhost:3000/emitir-nfse \
--H 'Content-Type: application/json' \
--d '{
-  "dps": {
-    "serie": "900",
-    "numero": 27,
-    "dataCompetencia": "2025-08-06"
-  },
-  "prestador": {
-    "cnpj": "51512249000117",
-    "codigoMunicipio": "4115200"
-  },
-  "tomador": {
-    "documento": "05389061000106",
-    "razaoSocial": "EMPRESA TOMADORA LTDA",
-    "endereco": {
-      "logradouro": "RUA EXEMPLO",
-      "numero": "123",
-      "bairro": "CENTRO",
-      "codigoMunicipio": "4113502",
-      "cep": "87900000"
+git clone https://github.com/arthur-zacarias/nfse-api-final.git
+cd nfse-api-final
+npm install
+npm start    # Inicia em http://localhost:3000
+```
+
+Acesse a documentação interativa: **http://localhost:3000/api-docs** 📖
+
+---
+
+## 🔐 Autenticação
+
+O certificado digital A1 do prestador é passado em **dois headers HTTP** em cada requisição:
+
+| Header | Tipo | Descrição |
+|---|---|---|
+| `x-pfx-base64` | `string` | Arquivo `.pfx` codificado em **Base64** |
+| `x-pfx-password` | `string` | Senha do certificado |
+
+> **Nenhuma credencial é armazenada no servidor.** O certificado é usado apenas durante a assinatura e descartado depois.
+
+### Converter seu certificado para Base64
+
+```bash
+# Windows (PowerShell)
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("certificado.pfx")) | Set-Content cert_base64.txt
+
+# Linux/macOS
+base64 -i certificado.pfx -o cert_base64.txt
+```
+
+---
+
+## 📡 Endpoints Principais
+
+### POST `/nfse/emitir-simples` — Emissão Automática
+
+```bash
+curl -X POST http://localhost:3000/nfse/emitir-simples \
+  -H "Content-Type: application/json" \
+  -H "x-pfx-base64: SEU_CERT_BASE64" \
+  -H "x-pfx-password: sua_senha" \
+  -d '{
+    "cnpjPrestador": "11222333000181",
+    "cMunPrestacao": 3550308,
+    "cTribNac": "010201",
+    "xDescServ": "Desenvolvimento de Software - Contrato Mensal",
+    "vServ": 5000.00,
+    "dCompet": "2026-03-01",
+    "serie": "1",
+    "numero": 42,
+    "ambiente": "2",
+    "tomador": {
+      "cnpj": "44555666000197",
+      "xNome": "EMPRESA CLIENTE LTDA"
     }
-  },
-  "servico": {
-    "itemListaServico": "010201",
-    "discriminacao": "Referente ao servico prestado",
-    "codigoMunicipioPrestacao": "4115200",
-    "valor": 100.00
+  }'
+```
+
+**Resposta:**
+```json
+{
+  "status": "NFS-e emitida com sucesso!",
+  "chaveAcesso": "35260300000000000000000000001000000000000000000000",
+  "numeroNfse": "42",
+  "codigoVerificacao": "ABC12345",
+  "dataEmissao": "2026-03-01T14:30:00-03:00",
+  "tributacaoCalculada": {
+    "vBC": 5000,
+    "vISSQN": 150,
+    "aliquotaISS": 3,
+    "regimeTributarioDetectado": "LUCRO_PRESUMIDO",
+    "fonteAliquota": "ADN"
   }
-}'
+}
+```
+
+### DELETE / Cancelamento — `POST /nfse/:chave/eventos`
+
+```bash
+curl -X POST http://localhost:3000/nfse/35260300.../eventos \
+  -H "x-pfx-base64: SEU_CERT_BASE64" \
+  -H "x-pfx-password: sua_senha" \
+  -d '{
+    "cnpjAutor": "11222333000181",
+    "tipoEvento": "cancelamento",
+    "motivo": "Nota emitida com valor incorreto",
+    "ambiente": "2"
+  }'
 ```
 
 ---
 
-#### `GET /nfse/:chaveAcesso`
+## 🗺️ Ambientes
 
-Consulta os dados de uma NFS-e emitida.
+| Valor | Ambiente | URL Sefin |
+|---|---|---|
+| `"1"` | ✅ **Produção** | `https://sefin.nfse.gov.br/sefinnacional` |
+| `"2"` | 🧪 **Homologação** | `https://sefin.producaorestrita.nfse.gov.br/SefinNacional` |
 
-**Exemplo de `curl`:**
+---
 
-```bash
-curl -X GET http://localhost:3000/nfse/SUA_CHAVE_DE_ACESSO
+## 🏗️ Arquitetura
+
+```
+src/
+├── index.ts                     # Entry point + Swagger UI
+├── config/
+│   └── environments.ts          # URLs Sefin (produção e homologação)
+├── controllers/
+│   ├── NfseController.ts        # Handlers HTTP de emissão e eventos
+│   └── TributacaoController.ts  # Handler de cálculo tributário
+├── services/
+│   ├── DpsService.ts            # Geração do XML da DPS (Sefin v1.01)
+│   ├── EventoService.ts         # Geração de eventos (cancelamento, etc.)
+│   ├── XmlSigningService.ts     # Assinatura digital com cert A1
+│   ├── GovApiService.ts         # Cliente HTTP para a API da Sefin
+│   ├── TaxCalculationService.ts # Cálculo de IBS, CBS, ISS, PIS/COFINS
+│   ├── CnpjService.ts           # Consulta Receita Federal (regime tributário)
+│   └── ParametrizacaoService.ts # Consulta ADN (alíquotas ISSQN)
+├── dtos/
+│   ├── NfsInputDto.ts           # Tipos TypeScript do input de emissão
+│   ├── EventoInputDto.ts        # Tipos do input de evento
+│   └── SefinDpsDto.ts           # Schema completo da DPS Sefin v1.01
+├── routes/
+│   └── NfseRoutes.ts            # Roteamento Express
+└── docs/
+    └── swaggerDef.yaml          # Documentação OpenAPI 3.0
 ```
 
 ---
 
-#### `GET /danfse/:chaveAcesso`
+## 📊 Suporte Tributário
 
-Consulta o DANFSe (PDF) de uma NFS-e emitida.
+| Regime | Detectado via | ISS | PIS/COFINS | IRRF | CSLL |
+|---|---|---|---|---|---|
+| **MEI** | CNPJ.ws | ✅ via ADN | ❌ (isento) | ❌ | ❌ |
+| **Simples Nacional** | CNPJ.ws | ✅ via ADN | ❌ (incluso no DAS) | ❌ | ❌ |
+| **Lucro Presumido** | CNPJ.ws | ✅ via ADN | ✅ (0.65% + 3%) | ✅ (1.5%) | ✅ (1%) |
+| **Lucro Real** | CNPJ.ws | ✅ via ADN | ✅ | ✅ | ✅ |
 
-**Exemplo de `curl`:**
-
-```bash
-curl -X GET http://localhost:3000/danfse/SUA_CHAVE_DE_ACESSO
-```
+> Reformulação Tributária: suporte a **IBS e CBS** (Sefin v1.01) disponível no campo `ibsCbs` do endpoint completo.
 
 ---
 
-#### `POST /debug/gerar-xml`
+## 📋 Requisitos da NFS-e Nacional
 
-Gera um arquivo XML para depuração com os dados enviados, sem assinar ou enviar para a SEFIN. O arquivo será salvo na pasta `debug/`.
+Para emitir, você precisa:
 
-**Exemplo de `curl`:**
+1. **Certificado Digital A1** (arquivo `.pfx` + senha)
+2. **CNPJ ativo** com serviço cadastrado na CNAE
+3. **Município aderente** à Sefin Nacional (verificar no portal)
+4. **Código de Tributação Nacional** (`cTribNac`) — [tabela SEFIN](https://www.nfse.gov.br)
+5. Ambiente de **homologação** para testes antes de ir para produção
 
-```bash
-curl -X POST http://localhost:3000/debug/gerar-xml \
--H 'Content-Type: application/json' \
--d '{
-  "dps": {
-    "serie": "900",
-    "numero": 27,
-    "dataCompetencia": "2025-08-06"
-  },
-  "prestador": {
-    "cnpj": "51512249000117",
-    "codigoMunicipio": "4115200"
-  },
-  "tomador": {
-    "documento": "05389061000106",
-    "razaoSocial": "EMPRESA TOMADORA LTDA",
-    "endereco": {
-      "logradouro": "RUA EXEMPLO",
-      "numero": "123",
-      "bairro": "CENTRO",
-      "codigoMunicipio": "4113502",
-      "cep": "87900000"
-    }
-  },
-  "servico": {
-    "itemListaServico": "010201",
-    "discriminacao": "Referente ao servico prestado",
-    "codigoMunicipioPrestacao": "4115200",
-    "valor": 100.00
-  }
-}'
-```
+---
 
-## 📁 Estrutura do Projeto
+## 🤝 Contribuindo
 
-```
-nfse-api-final/
-├── certs/                # Certificados digitais
-├── debug/                # XMLs de debug
-├── node_modules/         # Dependências
-├── src/
-│   ├── config/           # Configurações de ambiente
-│   ├── controllers/      # Controladores da API
-│   ├── docs/             # Arquivos de documentação (Swagger)
-│   ├── dtos/             # Data Transfer Objects
-│   ├── routes/           # Definição das rotas
-│   ├── services/         # Lógica de negócio
-│   └── types/            # Definições de tipos
-├── .env                  # Arquivo de variáveis de ambiente
-├── package.json          # Dependências e scripts
-└── tsconfig.json         # Configurações do TypeScript
-```
+Contribuições são bem-vindas!
 
-## 🤝 Contribuições
+1. Faça um fork do repositório
+2. Crie uma branch: `git checkout -b feat/minha-feature`
+3. Commit: `git commit -m 'feat: minha feature'`
+4. Push: `git push origin feat/minha-feature`
+5. Abra um Pull Request
 
-Contribuições são bem-vindas! Sinta-se à vontade para abrir uma *issue* ou enviar um *pull request*.
+---
 
 ## 📄 Licença
 
-Este projeto é licenciado sob a licença MIT.
+Distribuído sob a licença **MIT**. Veja [`LICENSE`](LICENSE) para mais informações.
+
+---
+
+## 👨‍💻 Créditos
+
+Desenvolvido por **Arthur Zacarias**
+
+[![GitHub](https://img.shields.io/badge/GitHub-arthur--zacarias-181717?logo=github&logoColor=white)](https://github.com/arthur-zacarias)
+
+> Este projeto foi criado para resolver a complexidade de integração com a **NFS-e Nacional** (Sefin), permitindo que sistemas de faturamento emitam notas fiscais de serviço eletrônicas com uma única chamada REST, sem precisar conhecer a fundo o padrão XML da DPS v1.01.
+
+---
+
+<div align="center">
+
+Feito com ☕ e **TypeScript** · Padrão Sefin v1.01 · Brasil 🇧🇷
+
+</div>

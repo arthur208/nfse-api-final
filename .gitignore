@@ -1,2 +1,40 @@
-/certs
-/node_modules
+# Dependências
+node_modules/
+dist/
+
+# Variáveis de ambiente
+.env
+.env.local
+.env.production
+
+# Certificados e arquivos sensíveis
+certs/
+*.pem
+*.pfx
+*.p12
+*_base64.txt
+
+# Arquivos de debug gerados em runtime
+debug/
+*.xml
+*.pdf
+temp_*.txt
+test_*.txt
+test_*.pdf
+diff_*.txt
+schema_tree.txt
+
+# Arquivos temporários e de análise
+*.txt
+!README.txt
+
+# Compilado TypeScript
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

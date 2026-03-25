@@ -1,7 +1,9 @@
 // src/controllers/NfseController.ts
 import { Request, Response } from 'express';
 import { NfsInputDto } from '../dtos/NfsInputDto';
+import { EventoInputDto } from '../dtos/EventoInputDto';
 import { DpsService } from '../services/DpsService';
+import { EventoService } from '../services/EventoService';
 import { GovApiService } from '../services/GovApiService';
 import { XmlSigningService } from '../services/XmlSigningService';
 import { environments } from '../config/environments';
@@ -35,24 +37,25 @@ async function processCertificateFromHeaders(req: Request): Promise<{ key: strin
 export class NfseController {
   constructor(
     private dpsService: DpsService,
-    private signingService: XmlSigningService
-  ) {}
-  
+    private signingService: XmlSigningService,
+    private eventoService: EventoService
+  ) { }
+
   public emitir = async (req: Request, res: Response): Promise<Response> => {
     try {
       const { key, cert, pfxBuffer, pfxPassword } = await processCertificateFromHeaders(req);
-      
+
       const inputData: NfsInputDto = req.body;
       const ambiente = inputData.ambiente === '1' ? 'producao' : 'homologacao';
       console.log(`[CONTROLLER] >> Emissão iniciada para o ambiente: ${ambiente.toUpperCase()}`);
 
       const unsignedXml = this.dpsService.buildUnsignedXml(inputData, inputData.ambiente || '2');
       const signedXml = this.signingService.signXml(unsignedXml, key, cert);
-      
+
       const baseUrl = environments[ambiente].baseUrl;
       const govApiService = new GovApiService();
-      govApiService.initialize(pfxBuffer, pfxPassword, baseUrl);
-      
+      govApiService.initialize(pfxBuffer, pfxPassword, baseUrl, environments[ambiente].danfseUrl);
+
       const govResponse = await govApiService.emitirNfse(signedXml);
       return res.status(201).json({ status: 'NFS-e emitida com sucesso!', ...govResponse });
 
@@ -75,10 +78,10 @@ export class NfseController {
       const { pfxBuffer, pfxPassword } = await processCertificateFromHeaders(req);
       console.log(`[CONTROLLER] >> Iniciando consulta de NFS-e para a chave: ${chaveAcesso}`);
       console.log('--- Tentando no ambiente de PRODUÇÃO...');
-      
+
       const govApiServiceProd = new GovApiService();
-      govApiServiceProd.initialize(pfxBuffer, pfxPassword, environments.producao.baseUrl);
-      
+      govApiServiceProd.initialize(pfxBuffer, pfxPassword, environments.producao.baseUrl, environments.producao.danfseUrl);
+
       const resultado = await govApiServiceProd.consultarNfse(chaveAcesso);
       console.log('[CONTROLLER] << Consulta em PRODUÇÃO realizada com sucesso.');
       return res.status(200).json(resultado);
@@ -88,10 +91,10 @@ export class NfseController {
         console.log('--- NFS-e não encontrada em PRODUÇÃO. Tentando no ambiente de HOMOLOGAÇÃO...');
         try {
           const { pfxBuffer, pfxPassword } = await processCertificateFromHeaders(req);
-          
+
           const govApiServiceHomol = new GovApiService();
-          govApiServiceHomol.initialize(pfxBuffer, pfxPassword, environments.homologacao.baseUrl);
-          
+          govApiServiceHomol.initialize(pfxBuffer, pfxPassword, environments.homologacao.baseUrl, environments.homologacao.danfseUrl);
+
           const resultadoHomol = await govApiServiceHomol.consultarNfse(chaveAcesso);
           console.log('[CONTROLLER] << Consulta em HOMOLOGAÇÃO realizada com sucesso.');
           return res.status(200).json(resultadoHomol);
@@ -111,7 +114,7 @@ export class NfseController {
       res.status(400).json({ message: 'A chave de acesso é obrigatória e deve conter 50 caracteres.' });
       return;
     }
-    
+
     let resultado: { data: Buffer, headers: any } | null = null;
     try {
       const { pfxBuffer, pfxPassword } = await processCertificateFromHeaders(req);
@@ -119,7 +122,7 @@ export class NfseController {
       console.log('--- Tentando DANFSe no ambiente de PRODUÇÃO...');
 
       const govApiServiceProd = new GovApiService();
-      govApiServiceProd.initialize(pfxBuffer, pfxPassword, environments.producao.baseUrl);
+      govApiServiceProd.initialize(pfxBuffer, pfxPassword, environments.producao.baseUrl, environments.producao.danfseUrl);
       resultado = await govApiServiceProd.consultarDanfse(chaveAcesso);
 
     } catch (errorProd: any) {
@@ -127,9 +130,9 @@ export class NfseController {
         console.log('--- DANFSe não encontrado em PRODUÇÃO. Tentando no ambiente de HOMOLOGAÇÃO...');
         try {
           const { pfxBuffer, pfxPassword } = await processCertificateFromHeaders(req);
-          
+
           const govApiServiceHomol = new GovApiService();
-          govApiServiceHomol.initialize(pfxBuffer, pfxPassword, environments.homologacao.baseUrl);
+          govApiServiceHomol.initialize(pfxBuffer, pfxPassword, environments.homologacao.baseUrl, environments.homologacao.danfseUrl);
           resultado = await govApiServiceHomol.consultarDanfse(chaveAcesso);
         } catch (errorHomol: any) {
           res.status(errorHomol.status || 500).json({ message: 'Erro ao consultar DANFSe em homologação.', details: errorHomol.details });
@@ -144,8 +147,8 @@ export class NfseController {
     if (resultado) {
       console.log('[CONTROLLER] << DANFSe encontrado. Retransmitindo o PDF...');
       res.setHeader('Content-Type', resultado.headers['content-type'] || 'application/pdf');
-      if(resultado.headers['content-disposition']) res.setHeader('Content-Disposition', resultado.headers['content-disposition']);
-      if(resultado.headers['content-length']) res.setHeader('Content-Length', resultado.headers['content-length']);
+      if (resultado.headers['content-disposition']) res.setHeader('Content-Disposition', resultado.headers['content-disposition']);
+      if (resultado.headers['content-length']) res.setHeader('Content-Length', resultado.headers['content-length']);
       res.send(resultado.data);
     } else {
       res.status(404).json({ message: 'DANFSe não encontrado para a chave de acesso informada.' });
@@ -156,12 +159,12 @@ export class NfseController {
     try {
       const inputData: NfsInputDto = req.body;
       const ambiente = inputData.ambiente || '2';
-      
+
       const unsignedXml = this.dpsService.buildUnsignedXml(inputData, ambiente);
-      
+
       const fileName = `dps-debug-${Date.now()}.xml`;
       const filePath = path.join(process.cwd(), 'debug', fileName);
-      
+
       fs.writeFileSync(filePath, unsignedXml);
 
       return res.status(200).json({
@@ -173,6 +176,92 @@ export class NfseController {
       console.error('\n--- [CONTROLLER] ERRO AO GERAR XML DE DEBUG ---', error);
       return res.status(error.status || 500).json({
         message: 'Ocorreu um erro ao gerar o XML de depuração.',
+        details: error.details || error.message,
+      });
+    }
+  };
+
+  public registrarEvento = async (req: Request, res: Response): Promise<Response> => {
+    try {
+      const { key, cert, pfxBuffer, pfxPassword } = await processCertificateFromHeaders(req);
+      const inputData: EventoInputDto = req.body;
+
+      // Validações básicas
+      if (!inputData.chaveAcesso || inputData.chaveAcesso.length !== 50) {
+        return res.status(400).json({ message: 'O campo chaveAcesso é obrigatório e deve ter exatamente 50 caracteres.' });
+      }
+      if (!inputData.cnpjAutor) {
+        return res.status(400).json({ message: 'O campo cnpjAutor é obrigatório.' });
+      }
+      if (!inputData.tipoEvento) {
+        return res.status(400).json({ message: 'O campo tipoEvento é obrigatório. Valores aceitos: cancelamento, cancelamentoPorSubstituicao, confirmacaoPrestador, rejeicaoPrestador' });
+      }
+
+      const ambiente = inputData.ambiente === '1' ? 'producao' : 'homologacao';
+      console.log(`[CONTROLLER] >> Registrando evento '${inputData.tipoEvento}' para a NFS-e: ${inputData.chaveAcesso} | Ambiente: ${ambiente.toUpperCase()}`);
+
+      // 1. Constrói o XML do evento
+      const unsignedXml = this.eventoService.buildEventoXml(inputData);
+
+      // 2. Assina o XML com o certificado do prestador
+      const signedXml = this.signingService.signXml(unsignedXml, key, cert);
+
+      // 3. Envia para a Sefin Nacional
+      const baseUrl = environments[ambiente].baseUrl;
+      const govApiService = new GovApiService();
+      govApiService.initialize(pfxBuffer, pfxPassword, baseUrl, environments[ambiente].danfseUrl);
+
+      const govResponse = await govApiService.registrarEvento(signedXml, inputData.chaveAcesso);
+
+      console.log(`[CONTROLLER] << Evento registrado com sucesso!`);
+      return res.status(201).json({ status: 'Evento registrado com sucesso!', ...govResponse });
+
+    } catch (error: any) {
+      console.error('\n--- [CONTROLLER] ERRO AO REGISTRAR EVENTO ---', error);
+      return res.status(error.status || 500).json({
+        message: 'Ocorreu um erro ao registrar o evento.',
+        details: error.details || error.message,
+      });
+    }
+  };
+
+  public consultarEventos = async (req: Request, res: Response): Promise<Response> => {
+    const { chaveAcesso } = req.params;
+    // tipoEvento e numSeqEvento são opcionais (default: 101101 e 1)
+    const tipoEvento = parseInt(req.params.tipoEvento || '101101', 10);
+    const numSeqEvento = parseInt(req.params.numSeqEvento || '1', 10);
+
+    if (!chaveAcesso || chaveAcesso.length !== 50) {
+      return res.status(400).json({ message: 'A chave de acesso é obrigatória e deve conter 50 caracteres.' });
+    }
+
+    try {
+      const { pfxBuffer, pfxPassword } = await processCertificateFromHeaders(req);
+      console.log(`[CONTROLLER] >> Consultando eventos da NFS-e: ${chaveAcesso}`);
+
+      // Tenta em produção primeiro
+      try {
+        const govApiServiceProd = new GovApiService();
+        govApiServiceProd.initialize(pfxBuffer, pfxPassword, environments.producao.baseUrl, environments.producao.danfseUrl);
+        const resultado = await govApiServiceProd.consultarEventos(chaveAcesso, tipoEvento, numSeqEvento);
+        console.log('[CONTROLLER] << Consulta de eventos em PRODUÇÃO realizada com sucesso.');
+        return res.status(200).json(resultado);
+      } catch (errProd: any) {
+        if (errProd.status !== 404) throw errProd;
+
+        // Tenta em homologação
+        console.log('--- Não encontrado em PRODUÇÃO. Tentando em HOMOLOGAÇÃO...');
+        const govApiServiceHomol = new GovApiService();
+        govApiServiceHomol.initialize(pfxBuffer, pfxPassword, environments.homologacao.baseUrl, environments.homologacao.danfseUrl);
+        const resultado = await govApiServiceHomol.consultarEventos(chaveAcesso, tipoEvento, numSeqEvento);
+        console.log('[CONTROLLER] << Consulta de eventos em HOMOLOGAÇÃO realizada com sucesso.');
+        return res.status(200).json(resultado);
+      }
+
+    } catch (error: any) {
+      console.error('\n--- [CONTROLLER] ERRO AO CONSULTAR EVENTOS ---', error);
+      return res.status(error.status || 500).json({
+        message: 'Ocorreu um erro ao consultar os eventos.',
         details: error.details || error.message,
       });
     }

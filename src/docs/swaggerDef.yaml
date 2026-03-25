@@ -1,31 +1,69 @@
 openapi: 3.0.0
 info:
-  title: API de Emissão de NFS-e
-  version: 1.0.0
-  description: API para emissão, consulta e gerenciamento de Nota Fiscal de Serviço Eletrônica (NFS-e) no padrão nacional.
+  title: API de Emissão de NFS-e (Sefin Nacional v1.01)
+  version: 2.0.0
+  description: |
+    API para emissão, consulta, cancelamento e gerenciamento de Nota Fiscal de Serviço
+    Eletrônica (NFS-e) no padrão nacional da Sefin, versão **1.01**.
+
+    ## Autenticação
+    Todas as rotas exigem o certificado digital A1 do prestador passado via cabeçalhos HTTP:
+    - `x-pfx-base64`: conteúdo do arquivo `.pfx` codificado em **Base64**
+    - `x-pfx-password`: senha do certificado
+
+    ## Ambientes
+    | Valor | Descrição |
+    |-------|-----------|
+    | `"1"` | Produção |
+    | `"2"` | Homologação *(padrão)* |
+
+    ## Regimes (opcaoSimplesNacional)
+    | Valor | Significado |
+    |-------|-------------|
+    | `"1"` | Não optante pelo Simples Nacional |
+    | `"2"` | MEI — paga ISS fixo via DAS |
+    | `"3"` | ME/EPP — optante pelo Simples Nacional |
+
+    ## Retenção do ISSQN (tpRetISSQN / retencao)
+    | Valor | Quem recolhe |
+    |-------|-------------|
+    | `"1"` | Prestador (retenção própria) |
+    | `"2"` | Tomador retém na fonte |
+    | `"3"` | Intermediário retém |
+
+servers:
+  - url: http://localhost:3000
+    description: Servidor local de desenvolvimento
 
 tags:
-  - name: NFS-e
-    description: Emissão e consulta de Nota Fiscal de Serviço eletrônica.
+  - name: Emissão
+    description: Emissão de NFS-e (modo completo e modo simplificado)
+  - name: Tributação
+    description: Cálculo automático de tributos
+  - name: Consulta
+    description: Consulta de NFS-e e DANFSe
+  - name: Eventos
+    description: Cancelamento, confirmação e consulta de eventos da NFS-e
+  - name: Debug
+    description: Ferramentas de depuração
 
 paths:
+
+  # ──────────────────────────────────────────────────────────────────────
+  # EMISSÃO
+  # ──────────────────────────────────────────────────────────────────────
+
   /emitir-nfse:
     post:
-      summary: Emite uma nova Nota Fiscal de Serviço Eletrônica
-      tags: [NFS-e]
+      summary: Emite uma NFS-e (modo completo / full control)
+      tags: [Emissão]
+      description: |
+        Emite uma NFS-e enviando o JSON completamente preenchido com todos os dados de tributação.
+        Use este endpoint quando precisar controle total sobre os valores de impostos.
+        Para envio automático de tributos, use **POST /nfse/emitir-simples**.
       parameters:
-        - name: x-pfx-base64
-          in: header
-          required: true
-          description: Conteúdo do certificado .pfx codificado em Base64.
-          schema:
-            type: string
-        - name: x-pfx-password
-          in: header
-          required: true
-          description: Senha do certificado .pfx.
-          schema:
-            type: string
+        - $ref: '#/components/parameters/PfxBase64'
+        - $ref: '#/components/parameters/PfxPassword'
       requestBody:
         required: true
         content:
@@ -33,439 +71,1211 @@ paths:
             schema:
               $ref: '#/components/schemas/NfsInputDto'
             examples:
-              minimoObrigatorio:
-                summary: Requisição com o mínimo de campos obrigatórios
+              mei_minimo:
+                summary: MEI — campos mínimos obrigatórios
                 value:
                   ambiente: "2"
                   dps:
-                    serie: "1"
-                    numero: 1
-                    dataCompetencia: "2025-08-06"
+                    serie: "901"
+                    numero: 31
+                    dataCompetencia: "2026-03-23"
                   prestador:
                     identificacao:
-                      cnpj: "00000000000191"
-                    codigoMunicipio: "3550308"
+                      cnpj: "11222333000181"
+                    codigoMunicipio: "4115200"
                     regimeTributacao:
-                      opcaoSimplesNacional: "1"
+                      opcaoSimplesNacional: "2"
                       regimeEspecial: "0"
                   servico:
-                    itemListaServico: "01.02"
-                    discriminacao: "Serviço de exemplo para teste de emissão."
-                    codigoMunicipioPrestacao: "3550308"
+                    itemListaServico: "010201"
+                    discriminacao: "Assinatura Mensal - Plataforma SaaS"
+                    codigoMunicipioPrestacao: "4115200"
                   valores:
-                    valorServico: 100.00
+                    valorServico: 150.00
                     iss:
                       tributacao: "1"
                       retencao: "1"
                     totaisTributos:
                       indicador: "0"
-              completo:
-                summary: Requisição com múltiplos campos preenchidos
+              lucro_presumido_completo:
+                summary: Lucro Presumido — com PIS/COFINS e rentenções
                 value:
                   ambiente: "2"
                   dps:
                     serie: "1"
-                    numero: 2
-                    dataCompetencia: "2025-08-06"
-                  substituicao:
-                    chaveAcessoSubstituida: "3525080000000000019120000000010000000011234567890"
-                    codigoMotivo: "99"
-                    motivo: "Correção de valor do serviço"
+                    numero: 5
+                    dataCompetencia: "2026-03-23"
                   prestador:
                     identificacao:
                       cnpj: "00000000000191"
                     codigoMunicipio: "3550308"
                     razaoSocial: "EMPRESA PRESTADORA LTDA"
-                    nomeFantasia: "PRESTADORA WEB"
                     regimeTributacao:
-                      opcaoSimplesNacional: "3"
-                      regimeApuracaoSN: "1"
+                      opcaoSimplesNacional: "1"
                       regimeEspecial: "0"
                   tomador:
                     identificacao:
-                      cpf: "11122233344"
-                    razaoSocial: "CLIENTE PESSOA FISICA"
+                      cnpj: "44555666000197"
+                    razaoSocial: "EMPRESA TOMADORA LTDA"
                     endereco:
-                      logradouro: "RUA DO CLIENTE"
-                      numero: "456"
-                      bairro: "BAIRRO MODELO"
+                      logradouro: "RUA DO TOMADOR"
+                      numero: "100"
+                      bairro: "CENTRO"
                       codigoMunicipio: "3550308"
-                      cep: "12345678"
-                    contato:
-                      email: "cliente@email.com"
-                  intermediario:
-                    identificacao:
-                      cnpj: "99888777000166"
-                    razaoSocial: "PLATAFORMA DE SERVICOS LTDA"
+                      cep: "01310100"
                   servico:
                     itemListaServico: "01.07"
-                    discriminacao: "Serviço completo de consultoria e desenvolvimento."
+                    discriminacao: "Consultoria em Tecnologia da Informação"
                     codigoMunicipioPrestacao: "3550308"
                   valores:
-                    valorServico: 1500.00
-                    descontoIncondicionado: 50.00
+                    valorServico: 5000.00
                     iss:
                       tributacao: "1"
-                      aliquota: 5.00
+                      aliquota: 2.00
                       retencao: "2"
                     tributosFederais:
                       piscofins:
                         cst: "01"
-                        valorBC: 1450.00
+                        valorBC: 5000.00
                         aliquotaPis: 0.65
                         aliquotaCofins: 3.00
-                      valorRetidoIRRF: 15.00
+                        valorPis: 32.50
+                        valorCofins: 150.00
+                      valorRetidoIRRF: 75.00
+                      valorRetidoCSLL: 50.00
                     totaisTributos:
                       indicador: "0"
       responses:
         '201':
-          description: NFS-e emitida com sucesso.
+          description: NFS-e emitida com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespostaEmissao'
+              example:
+                status: "NFS-e emitida com sucesso!"
+                chaveAcesso: "41152002211222333000181900000000313026030561234567"
+                numeroNfse: "31"
+                codigoVerificacao: "XYZ12345"
+                dataEmissao: "2026-03-23T14:45:00-03:00"
         '400':
-          description: Erro nos dados de entrada ou falha de validação da API do governo.
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Certificado ou senha inválidos.
+          $ref: '#/components/responses/Unauthorized'
         '500':
-          description: Erro interno do servidor ou na comunicação com a API do governo.
+          $ref: '#/components/responses/InternalError'
 
-  /debug/gerar-xml:
+  /nfse/emitir-simples:
     post:
-      summary: Gera um arquivo XML da DPS para depuração
-      tags: [NFS-e]
-      description: Não assina nem envia a DPS. Apenas gera o XML com base nos dados de entrada e o salva em um arquivo no diretório /debug do servidor.
+      summary: Emite uma NFS-e com tributação automática (modo simplificado)
+      tags: [Emissão]
+      description: |
+        **Endpoint inteligente** — você passa apenas os dados básicos do serviço.
+        O sistema irá automaticamente:
+        1. Consultar a Receita Federal para detectar o regime tributário (MEI, Simples, LP/LR)
+        2. Consultar o ADN da prefeitura para obter as alíquotas de ISSQN vigentes
+        3. Calcular PIS/COFINS, IRRF e CSLL conforme o regime
+        4. Montar e assinar o XML da DPS
+        5. Enviar à Sefin Nacional
+
+        > **Ideal para integração com sistemas de faturamento** onde não se quer lidar com os detalhes tributários.
+      parameters:
+        - $ref: '#/components/parameters/PfxBase64'
+        - $ref: '#/components/parameters/PfxPassword'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/NfsInputDto'
+              $ref: '#/components/schemas/EmitirSimplesInput'
             examples:
-              minimoObrigatorio:
-                $ref: '#/paths/~1emitir-nfse/post/requestBody/content/application~1json/examples/minimoObrigatorio'
-              completo:
-                $ref: '#/paths/~1emitir-nfse/post/requestBody/content/application~1json/examples/completo'
+              basico:
+                summary: Emissão básica — campos mínimos
+                value:
+                  cnpjPrestador: "11222333000181"
+                  cMunPrestacao: 4115200
+                  cTribNac: "010201"
+                  xDescServ: "Assinatura Mensal - Plataforma SaaS"
+                  vServ: 150.00
+                  dCompet: "2026-03-23"
+                  serie: "901"
+                  numero: 32
+                  ambiente: "2"
+              com_tomador:
+                summary: Com dados do tomador
+                value:
+                  cnpjPrestador: "11222333000181"
+                  cMunPrestacao: 4115200
+                  cTribNac: "010201"
+                  xDescServ: "Assinatura Mensal - Plataforma SaaS — cliente BIOESSENCIA"
+                  vServ: 150.00
+                  dCompet: "2026-03-23"
+                  serie: "901"
+                  numero: 33
+                  ambiente: "2"
+                  tomador:
+                    cnpj: "44555666000197"
+                    xNome: "EMPRESA TOMADORA LTDA"
+                    endereco:
+                      logradouro: "RUA DOS EXEMPLOS"
+                      numero: "655"
+                      bairro: "CENTRO"
+                      codigoMunicipio: "4113502"
+                      cep: "87900000"
       responses:
-        '200':
-          description: Arquivo XML de depuração gerado com sucesso.
+        '201':
+          description: NFS-e emitida com sucesso
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message: { type: string, example: "Arquivo XML de depuração gerado com sucesso!" }
-                  filePath: { type: string, example: "debug/dps-debug-1678886400000.xml" }
+                allOf:
+                  - $ref: '#/components/schemas/RespostaEmissao'
+                  - type: object
+                    properties:
+                      tributacaoCalculada:
+                        $ref: '#/components/schemas/TributacaoCalculada'
+                      prestadorDetectado:
+                        $ref: '#/components/schemas/PrestadorDetectado'
+              example:
+                status: "NFS-e emitida com sucesso!"
+                chaveAcesso: "41152002211222333000181900000000333026030561234568"
+                numeroNfse: "33"
+                codigoVerificacao: "ABC98765"
+                dataEmissao: "2026-03-23T14:47:00-03:00"
+                tributacaoCalculada:
+                  vBC: 150
+                  vISSQN: 4.5
+                  vLiq: 150
+                  fonteAliquota: "ADN"
+                  aliquotaISS: 3
+                  municipioAderente: true
+                  issqnRetidoPeloTomador: false
+                  retencoesFederaisAplicadas: false
+                  regimeTributarioDetectado: "MEI"
+                prestadorDetectado:
+                  xNome: "51.512.249 PRESTADOR SERVICOS LTDA"
+                  regime: "MEI"
+                  opSimpNac: 2
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '500':
-          description: Erro interno do servidor ao gerar o XML.
+          $ref: '#/components/responses/InternalError'
+
+  # ──────────────────────────────────────────────────────────────────────
+  # TRIBUTAÇÃO
+  # ──────────────────────────────────────────────────────────────────────
+
+  /tributacao/calcular:
+    post:
+      summary: Calcula tributos automaticamente (sem emitir)
+      tags: [Tributação]
+      description: |
+        Consulta a Receita Federal e o ADN da prefeitura e retorna o bloco completo de tributação,
+        incluindo alíquota de ISSQN, PIS/COFINS e regimes.
+        **Não emite nenhuma nota** — útil para pré-visualização de impostos.
+      parameters:
+        - $ref: '#/components/parameters/PfxBase64'
+        - $ref: '#/components/parameters/PfxPassword'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TributacaoInput'
+            example:
+              cnpjPrestador: "11222333000181"
+              cMunPrestacao: 4115200
+              cTribNac: "010201"
+              vServ: 150.00
+              dCompet: "2026-03-23"
+      responses:
+        '200':
+          description: Cálculo realizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxCalcResult'
+              example:
+                prestador:
+                  opSimpNac: 2
+                  regEspTrib: 0
+                  xNome: "51.512.249 PRESTADOR SERVICOS LTDA"
+                  cMun: 4115200
+                  uf: "PR"
+                valores:
+                  vServPrest:
+                    vServ: 150
+                  trib:
+                    tribMun:
+                      tribISSQN: 1
+                      tpRetISSQN: 1
+                    totTrib:
+                      indTotTrib: 0
+                calculado:
+                  vBC: 150
+                  vISSQN: 4.5
+                  vLiq: 150
+                  fonteAliquota: "ADN"
+                  aliquotaISS: 3
+                  municipioAderente: true
+                  issqnRetidoPeloTomador: false
+                  retencoesFederaisAplicadas: false
+                  regimeTributarioDetectado: "MEI"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ──────────────────────────────────────────────────────────────────────
+  # CONSULTA
+  # ──────────────────────────────────────────────────────────────────────
 
   /nfse/{chaveAcesso}:
     get:
       summary: Consulta os dados de uma NFS-e pela Chave de Acesso
-      tags: [NFS-e]
+      tags: [Consulta]
+      description: Retorna o JSON com os dados da NFS-e emitida e o XML em Base64.
       parameters:
-        - name: x-pfx-base64
-          in: header
-          required: true
-          description: Conteúdo do certificado .pfx codificado em Base64.
-          schema:
-            type: string
-        - name: x-pfx-password
-          in: header
-          required: true
-          description: Senha do certificado .pfx.
-          schema:
-            type: string
-        - name: chaveAcesso
-          in: path
-          required: true
-          description: Chave de Acesso de 50 dígitos da NFS-e.
-          schema:
-            type: string
-            example: "3525080000000000019120000000010000000011234567890"
+        - $ref: '#/components/parameters/PfxBase64'
+        - $ref: '#/components/parameters/PfxPassword'
+        - $ref: '#/components/parameters/ChaveAcesso'
       responses:
         '200':
-          description: NFS-e encontrada com sucesso.
+          description: NFS-e encontrada com sucesso
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  ambiente: { type: string, example: "2" }
-                  id: { type: string, example: "3525080000000000019120000000010000000011234567890" }
-                  numeroNfse: { type: string, example: "1" }
-                  codigoVerificacao: { type: string, example: "ABC123XYZ" }
-                  dataEmissao: { type: string, format: "date-time" }
-                  xml: { type: string, description: "XML completo da NFS-e em Base64." }
+                $ref: '#/components/schemas/RespostaConsulta'
+              example:
+                ambiente: "2"
+                id: "41152002211222333000181900000000313026030561234567"
+                numeroNfse: "31"
+                codigoVerificacao: "XYZ12345"
+                dataEmissao: "2026-03-23T14:45:00-03:00"
+                chaveAcesso: "41152002211222333000181900000000313026030561234567"
+                xml: "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4..."
         '400':
-          description: Chave de acesso inválida.
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Certificado ou senha inválidos.
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Chave de acesso não encontrada.
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /danfse/{chaveAcesso}:
     get:
-      summary: Consulta e retorna o DANFSe (PDF) de uma NFS-e
-      tags: [NFS-e]
+      summary: Retorna o DANFSe (PDF) de uma NFS-e
+      tags: [Consulta]
+      description: |
+        Faz proxy para a Sefin Nacional e retorna diretamente o PDF da NFS-e.
+        O PDF é retornado como stream (`application/pdf`).
       parameters:
-        - name: x-pfx-base64
-          in: header
-          required: true
-          description: Conteúdo do certificado .pfx codificado em Base64.
-          schema:
-            type: string
-        - name: x-pfx-password
-          in: header
-          required: true
-          description: Senha do certificado .pfx.
-          schema:
-            type: string
-        - name: chaveAcesso
-          in: path
-          required: true
-          description: Chave de Acesso de 50 dígitos da NFS-e.
-          schema:
-            type: string
-            example: "3525080000000000019120000000010000000011234567890"
+        - $ref: '#/components/parameters/PfxBase64'
+        - $ref: '#/components/parameters/PfxPassword'
+        - $ref: '#/components/parameters/ChaveAcesso'
       responses:
         '200':
-          description: DANFSe retornado com sucesso.
+          description: DANFSe retornado com sucesso
           content:
             application/pdf:
               schema:
                 type: string
                 format: binary
         '401':
-          description: Certificado ou senha inválidos.
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: DANFSe não encontrado para a chave de acesso informada.
+          $ref: '#/components/responses/NotFound'
 
+  # ──────────────────────────────────────────────────────────────────────
+  # EVENTOS
+  # ──────────────────────────────────────────────────────────────────────
+
+  /nfse/{chaveAcesso}/eventos:
+    post:
+      summary: Registra um evento na NFS-e (cancelamento, confirmação, rejeição)
+      tags: [Eventos]
+      description: |
+        Registra eventos na Sefin Nacional para a NFS-e informada.
+
+        ### Tipos de evento disponíveis
+        | Tipo | Código | Descrição |
+        |------|--------|-----------|
+        | `cancelamento` | 101101 | Cancelamento da NFS-e pelo prestador |
+        | `cancelamentoPorSubstituicao` | 101102 | Cancelamento com substituição por outra nota |
+        | `confirmacaoPrestador` | 104101 | Confirmação do serviço prestado pelo prestador |
+        | `rejeicaoPrestador` | 104102 | Rejeição do serviço pelo prestador |
+
+        > **Atenção:** O cancelamento de uma NFS-e autorizada **não** pode ser desfeito.
+      parameters:
+        - $ref: '#/components/parameters/PfxBase64'
+        - $ref: '#/components/parameters/PfxPassword'
+        - $ref: '#/components/parameters/ChaveAcesso'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventoInput'
+            examples:
+              cancelamento:
+                summary: Cancelamento simples
+                value:
+                  chaveAcesso: "41152002211222333000181900000000313026030561234567"
+                  cnpjAutor: "11222333000181"
+                  tipoEvento: "cancelamento"
+                  motivo: "Nota emitida com valor incorreto"
+                  ambiente: "2"
+              cancelamento_com_substituicao:
+                summary: Cancelamento com substituição
+                value:
+                  chaveAcesso: "41152002211222333000181900000000313026030561234567"
+                  cnpjAutor: "11222333000181"
+                  tipoEvento: "cancelamentoPorSubstituicao"
+                  chaveNfseSubstituta: "41152002211222333000181900000000323026030561234568"
+                  motivo: "Valor corrigido na nova nota"
+                  ambiente: "2"
+              confirmacao:
+                summary: Confirmação pelo prestador
+                value:
+                  chaveAcesso: "41152002211222333000181900000000313026030561234567"
+                  cnpjAutor: "11222333000181"
+                  tipoEvento: "confirmacaoPrestador"
+                  ambiente: "2"
+      responses:
+        '201':
+          description: Evento registrado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "Evento registrado com sucesso!"
+                  codigoStatus:
+                    type: string
+                    example: "100"
+                  motivo:
+                    type: string
+                    example: "Evento registrado com sucesso"
+              example:
+                status: "Evento registrado com sucesso!"
+                codigoStatus: "100"
+                motivo: "Evento registrado com sucesso"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    get:
+      summary: Consulta todos os eventos de uma NFS-e
+      tags: [Eventos]
+      description: |
+        Retorna a lista de todos os eventos registrados para uma NFS-e.
+        Se informar `tipoEvento` e `numSeqEvento`, filtra por um evento específico.
+      parameters:
+        - $ref: '#/components/parameters/PfxBase64'
+        - $ref: '#/components/parameters/PfxPassword'
+        - $ref: '#/components/parameters/ChaveAcesso'
+      responses:
+        '200':
+          description: Eventos consultados com sucesso
+          content:
+            application/json:
+              example:
+                eventos:
+                  - tipoEvento: 101101
+                    numSeqEvento: 1
+                    dataRegistro: "2026-03-23T15:00:00-03:00"
+                    cnpjAutor: "11222333000181"
+                    motivo: "Nota emitida com valor incorreto"
+                    codigoStatus: "100"
+
+  /nfse/{chaveAcesso}/eventos/{tipoEvento}/{numSeqEvento}:
+    get:
+      summary: Consulta um evento específico de uma NFS-e
+      tags: [Eventos]
+      parameters:
+        - $ref: '#/components/parameters/PfxBase64'
+        - $ref: '#/components/parameters/PfxPassword'
+        - $ref: '#/components/parameters/ChaveAcesso'
+        - name: tipoEvento
+          in: path
+          required: true
+          description: Código numérico do tipo de evento (ex. 101101 para cancelamento)
+          schema:
+            type: integer
+            example: 101101
+        - name: numSeqEvento
+          in: path
+          required: true
+          description: Número sequencial do evento (normalmente 1)
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Evento encontrado
+          content:
+            application/json:
+              example:
+                tipoEvento: 101101
+                numSeqEvento: 1
+                dataRegistro: "2026-03-23T15:00:00-03:00"
+                cnpjAutor: "11222333000181"
+                motivo: "Nota emitida com valor incorreto"
+                codigoStatus: "100"
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ──────────────────────────────────────────────────────────────────────
+  # DEBUG
+  # ──────────────────────────────────────────────────────────────────────
+
+  /debug/gerar-xml:
+    post:
+      summary: Gera o XML da DPS sem assinar nem enviar à Sefin
+      tags: [Debug]
+      description: |
+        Gera o XML não assinado com base nos dados de entrada e salva no diretório `/debug`.
+        Útil para validar o output do gerador antes de emitir de verdade.
+      parameters:
+        - $ref: '#/components/parameters/PfxBase64'
+        - $ref: '#/components/parameters/PfxPassword'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NfsInputDto'
+      responses:
+        '200':
+          description: XML gerado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Arquivo XML de depuração gerado com sucesso!"
+                  filePath:
+                    type: string
+                    example: "/app/debug/dps-debug-1234567890.xml"
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+# ══════════════════════════════════════════════════════════════════════════
+# COMPONENTS
+# ══════════════════════════════════════════════════════════════════════════
 components:
+
+  parameters:
+    PfxBase64:
+      name: x-pfx-base64
+      in: header
+      required: true
+      description: Certificado `.pfx` codificado em Base64
+      schema:
+        type: string
+    PfxPassword:
+      name: x-pfx-password
+      in: header
+      required: true
+      description: Senha do certificado `.pfx`
+      schema:
+        type: string
+    ChaveAcesso:
+      name: chaveAcesso
+      in: path
+      required: true
+      description: Chave de Acesso de 50 dígitos da NFS-e
+      schema:
+        type: string
+        minLength: 50
+        maxLength: 50
+        example: "41152002211222333000181900000000313026030561234567"
+
+  responses:
+    BadRequest:
+      description: Dados de entrada inválidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            message: "Campos obrigatórios faltando: vServ, dCompet"
+    Unauthorized:
+      description: Certificado digital inválido ou ausente
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            message: "Falha ao processar o certificado PFX."
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            message: "DANFSe não encontrado para a chave de acesso informada."
+    InternalError:
+      description: Erro interno ou falha na comunicação com a Sefin
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroDetalhado'
+          example:
+            message: "Erro ao emitir NFS-e."
+            details: "Rejeição 999 — Chave de acesso já utilizada"
+
   schemas:
+
+    # ──── Inputs ────────────────────────────────────────────────────────
+
     NfsInputDto:
       type: object
-      required:
-        - dps
-        - prestador
-        - servico
-        - valores
+      required: [dps, prestador, servico, valores]
+      description: Corpo completo da DPS para emissão manual com controle total sobre tributos
       properties:
-        ambiente: { type: string, enum: ["1", "2"], description: "Ambiente de destino: 1 - Produção, 2 - Homologação. Padrão: 2." }
-        dps: { $ref: '#/components/schemas/Dps' }
-        substituicao: { $ref: '#/components/schemas/Substituicao' }
-        prestador: { $ref: '#/components/schemas/Prestador' }
-        tomador: { $ref: '#/components/schemas/Tomador' }
-        intermediario: { $ref: '#/components/schemas/Intermediario' }
-        servico: { $ref: '#/components/schemas/Servico' }
-        valores: { $ref: '#/components/schemas/Valores' }
+        ambiente:
+          type: string
+          enum: ["1", "2"]
+          description: "1 = Produção, 2 = Homologação (padrão: 1)"
+        dps:
+          $ref: '#/components/schemas/Dps'
+        substituicao:
+          $ref: '#/components/schemas/Substituicao'
+        motivoEmissaoTomadorIntermediario:
+          type: string
+          enum: ["1", "2", "3", "4"]
+        chaveNfseRejeitada:
+          type: string
+          description: Chave da NFS-e rejeitada pelo Tomador/Intermediário (v1.01)
+        prestador:
+          $ref: '#/components/schemas/Prestador'
+        tomador:
+          $ref: '#/components/schemas/Tomador'
+        intermediario:
+          $ref: '#/components/schemas/Intermediario'
+        servico:
+          $ref: '#/components/schemas/Servico'
+        valores:
+          $ref: '#/components/schemas/Valores'
+        ibsCbs:
+          $ref: '#/components/schemas/IbsCbs'
+
+    EmitirSimplesInput:
+      type: object
+      required: [cnpjPrestador, cMunPrestacao, cTribNac, xDescServ, vServ, dCompet]
+      description: Corpo simplificado para emissão automática (sem precisar preencher impostos)
+      properties:
+        cnpjPrestador:
+          type: string
+          description: CNPJ do prestador (somente dígitos ou formatado)
+          example: "11222333000181"
+        cMunPrestacao:
+          type: integer
+          description: Código IBGE do município de prestação do serviço
+          example: 4115200
+        cTribNac:
+          type: string
+          description: Código de tributação nacional (6 dígitos, ex. "010201")
+          example: "010201"
+        xDescServ:
+          type: string
+          description: Descrição completa do serviço prestado
+          example: "Assinatura Mensal - Plataforma SaaS"
+        vServ:
+          type: number
+          format: double
+          description: Valor bruto do serviço
+          example: 150.00
+        dCompet:
+          type: string
+          format: date
+          description: Data de competência do serviço (AAAA-MM-DD)
+          example: "2026-03-23"
+        serie:
+          type: string
+          description: Série do DPS (padrão "1")
+          example: "901"
+        numero:
+          type: integer
+          description: Número do DPS
+          example: 32
+        ambiente:
+          type: string
+          enum: ["1", "2"]
+          description: "1 = Produção (padrão), 2 = Homologação"
+          example: "2"
+        tomador:
+          type: object
+          description: Dados do tomador do serviço (recomendado, mas opcional)
+          properties:
+            cnpj:
+              type: string
+              example: "44555666000197"
+            xNome:
+              type: string
+              example: "EMPRESA TOMADORA LTDA"
+            endereco:
+              $ref: '#/components/schemas/Endereco'
+            email:
+              type: string
+            telefone:
+              type: string
+        vDescIncond:
+          type: number
+          description: Valor do desconto incondicionado (opcional)
+        vDescCond:
+          type: number
+          description: Valor do desconto condicionado (opcional)
+        cNBS:
+          type: string
+          description: Código NBS opcional
+        cTribMun:
+          type: string
+          description: Código de tributação municipal (opcional)
+        pAliqManual:
+          type: number
+          description: Alíquota manual de ISS (somente se ADN não retornar — override)
+
+    TributacaoInput:
+      type: object
+      required: [cnpjPrestador, cMunPrestacao, cTribNac, vServ, dCompet]
+      description: Dados para cálculo tributário sem emissão
+      properties:
+        cnpjPrestador:
+          type: string
+          example: "11222333000181"
+        cMunPrestacao:
+          type: integer
+          example: 4115200
+        cTribNac:
+          type: string
+          example: "010201"
+        vServ:
+          type: number
+          example: 150.00
+        dCompet:
+          type: string
+          format: date
+          example: "2026-03-23"
+        tomadorPJ:
+          type: boolean
+          description: Se o tomador é PJ (afeta retenções federais, padrão true)
+          default: true
+        pAliqManual:
+          type: number
+          description: Override de alíquota de ISS se ADN não retornar
+
+    EventoInput:
+      type: object
+      required: [chaveAcesso, cnpjAutor, tipoEvento]
+      properties:
+        chaveAcesso:
+          type: string
+          minLength: 50
+          maxLength: 50
+          example: "41152002211222333000181900000000313026030561234567"
+        cnpjAutor:
+          type: string
+          description: CNPJ do autor do evento (prestador ou tomador)
+          example: "11222333000181"
+        tipoEvento:
+          type: string
+          enum: [cancelamento, cancelamentoPorSubstituicao, confirmacaoPrestador, rejeicaoPrestador]
+          example: "cancelamento"
+        motivo:
+          type: string
+          description: Motivo do evento (obrigatório para cancelamento)
+          example: "Nota emitida com valor incorreto"
+        chaveNfseSubstituta:
+          type: string
+          description: Chave da nota substituta (obrigatório para cancelamentoPorSubstituicao)
+        ambiente:
+          type: string
+          enum: ["1", "2"]
+          example: "2"
+
+    # ──── NfsInputDto sub-schemas ─────────────────────────────────────
 
     Dps:
       type: object
       required: [serie, numero, dataCompetencia]
       properties:
-        serie: { type: string, description: "Série do DPS ou número do equipamento emissor." }
-        numero: { type: integer, description: "Número do DPS." }
-        dataCompetencia: { type: string, format: date, description: "Data da competência do serviço (AAAA-MM-DD)." }
+        serie:
+          type: string
+          example: "901"
+        numero:
+          type: integer
+          example: 31
+        dataCompetencia:
+          type: string
+          format: date
+          example: "2026-03-23"
 
     Substituicao:
       type: object
       required: [chaveAcessoSubstituida, codigoMotivo]
       properties:
-        chaveAcessoSubstituida: { type: string, length: 50 }
-        codigoMotivo: { type: string, enum: ["01", "02", "03", "04", "05", "99"] }
-        motivo: { type: string }
+        chaveAcessoSubstituida:
+          type: string
+          minLength: 50
+          maxLength: 50
+        codigoMotivo:
+          type: string
+          enum: ["01", "02", "03", "04", "05", "99"]
+          description: |
+            01 - Erro na emissão | 02 - Serviço não prestado | 03 - Mudança do regime tributário
+            04 - Duplicidade de NFS-e | 05 - Erro na discriminação | 99 - Outros
+        motivo:
+          type: string
 
     Prestador:
       type: object
       required: [identificacao, codigoMunicipio, regimeTributacao]
       properties:
-        identificacao: { $ref: '#/components/schemas/DocumentoFiscal' }
-        codigoMunicipio: { type: string, description: "Código IBGE do município do prestador." }
-        inscricaoMunicipal: { type: string }
-        razaoSocial: { type: string }
-        nomeFantasia: { type: string }
-        caepf: { type: string }
-        endereco: { $ref: '#/components/schemas/Endereco' }
-        contato: { $ref: '#/components/schemas/Contato' }
+        identificacao:
+          $ref: '#/components/schemas/DocumentoFiscal'
+        codigoMunicipio:
+          type: string
+          example: "4115200"
+        inscricaoMunicipal:
+          type: string
+        razaoSocial:
+          type: string
+        nomeFantasia:
+          type: string
+        caepf:
+          type: string
+        endereco:
+          $ref: '#/components/schemas/Endereco'
+        contato:
+          $ref: '#/components/schemas/Contato'
         regimeTributacao:
           type: object
           required: [opcaoSimplesNacional, regimeEspecial]
           properties:
-            opcaoSimplesNacional: { type: string, enum: ["1", "2", "3"] }
-            regimeApuracaoSN: { type: string, enum: ["1", "2", "3"] }
-            regimeEspecial: { type: string, enum: ["0", "1", "2", "3", "4", "5", "6"] }
+            opcaoSimplesNacional:
+              type: string
+              enum: ["1", "2", "3"]
+              description: "1 = Não optante | 2 = MEI | 3 = ME/EPP Simples Nacional"
+            regimeApuracaoSN:
+              type: string
+              enum: ["1", "2", "3"]
+              description: Regime de apuração SN (apenas para opSimpNac=3)
+            regimeEspecial:
+              type: string
+              enum: ["0", "1", "2", "3", "4", "5", "6"]
+              description: "0 = Sem regime especial (mais comum)"
 
     Tomador:
       type: object
       required: [identificacao, razaoSocial]
       properties:
-        identificacao: { $ref: '#/components/schemas/DocumentoFiscal' }
-        razaoSocial: { type: string }
-        inscricaoMunicipal: { type: string }
-        endereco: { $ref: '#/components/schemas/Endereco' }
-        contato: { $ref: '#/components/schemas/Contato' }
+        identificacao:
+          $ref: '#/components/schemas/DocumentoFiscal'
+        razaoSocial:
+          type: string
+        inscricaoMunicipal:
+          type: string
+        endereco:
+          $ref: '#/components/schemas/Endereco'
+        contato:
+          $ref: '#/components/schemas/Contato'
 
     Intermediario:
       type: object
       required: [identificacao, razaoSocial]
       properties:
-        identificacao: { $ref: '#/components/schemas/DocumentoFiscal' }
-        razaoSocial: { type: string }
-        inscricaoMunicipal: { type: string }
+        identificacao:
+          $ref: '#/components/schemas/DocumentoFiscal'
+        razaoSocial:
+          type: string
+        inscricaoMunicipal:
+          type: string
 
     Servico:
       type: object
       required: [itemListaServico, discriminacao]
       properties:
-        itemListaServico: { type: string, description: "Código de tributação nacional (padrão LC 116/2003)." }
-        codigoTributacaoMunicipio: { type: string }
-        discriminacao: { type: string }
-        codigoMunicipioPrestacao: { type: string }
-        codigoPaisPrestacao: { type: string }
-        consumoServicoOcorrido: { type: string, enum: ["0", "1"] }
-        codigoNBS: { type: string }
-        codigoInternoContribuinte: { type: string }
-        comercioExterior: { $ref: '#/components/schemas/ComercioExterior' }
-        locacaoSublocacao: { $ref: '#/components/schemas/LocacaoSublocacao' }
-        obra: { $ref: '#/components/schemas/Obra' }
-        atividadeEvento: { $ref: '#/components/schemas/AtividadeEvento' }
-        exploracaoRodoviaria: { $ref: '#/components/schemas/ExploracaoRodoviaria' }
-        informacoesComplementares: { $ref: '#/components/schemas/InformacoesComplementares' }
+        itemListaServico:
+          type: string
+          description: Código LC 116/2003 (ex. "010201")
+          example: "010201"
+        codigoTributacaoMunicipio:
+          type: string
+        discriminacao:
+          type: string
+          example: "Assinatura Mensal - Plataforma SaaS"
+        codigoMunicipioPrestacao:
+          type: string
+          example: "4115200"
+        codigoPaisPrestacao:
+          type: string
+        consumoServicoOcorrido:
+          type: string
+          enum: ["0", "1"]
+        codigoNBS:
+          type: string
+        codigoInternoContribuinte:
+          type: string
+        comercioExterior:
+          $ref: '#/components/schemas/ComercioExterior'
+        locacaoSublocacao:
+          $ref: '#/components/schemas/LocacaoSublocacao'
+        obra:
+          $ref: '#/components/schemas/Obra'
+        atividadeEvento:
+          $ref: '#/components/schemas/AtividadeEvento'
+        exploracaoRodoviaria:
+          $ref: '#/components/schemas/ExploracaoRodoviaria'
+        informacoesComplementares:
+          $ref: '#/components/schemas/InformacoesComplementares'
 
     Valores:
       type: object
       required: [valorServico, iss]
       properties:
-        valorServico: { type: number, format: double }
-        valorRecebidoIntermediario: { type: number, format: double }
-        descontoCondicionado: { type: number, format: double }
-        descontoIncondicionado: { type: number, format: double }
-        deducaoReducao: { $ref: '#/components/schemas/DeducaoReducao' }
-        iss: { $ref: '#/components/schemas/Iss' }
-        tributosFederais: { $ref: '#/components/schemas/TributosFederais' }
-        totaisTributos: { $ref: '#/components/schemas/TotaisTributos' }
+        valorServico:
+          type: number
+          format: double
+          example: 150.00
+        valorRecebidoIntermediario:
+          type: number
+          format: double
+        descontoCondicionado:
+          type: number
+          format: double
+        descontoIncondicionado:
+          type: number
+          format: double
+        deducaoReducao:
+          $ref: '#/components/schemas/DeducaoReducao'
+        iss:
+          $ref: '#/components/schemas/Iss'
+        tributosFederais:
+          $ref: '#/components/schemas/TributosFederais'
+        totaisTributos:
+          $ref: '#/components/schemas/TotaisTributos'
 
     Iss:
       type: object
       required: [tributacao, retencao]
       properties:
-        tributacao: { type: string, enum: ["1", "2", "3", "4"] }
-        codigoPaisResultado: { type: string }
-        beneficioMunicipal: { $ref: '#/components/schemas/BeneficioMunicipal' }
-        exigibilidadeSuspensa: { $ref: '#/components/schemas/ExigibilidadeSuspensa' }
-        tipoImunidade: { type: string, enum: ["0", "1", "2", "3", "4"] }
-        aliquota: { type: number, format: double }
-        retencao: { type: string, enum: ["1", "2", "3"] }
+        tributacao:
+          type: string
+          enum: ["1", "2", "3", "4"]
+          description: "1 = Tributável | 2 = Isento | 3 = Imune | 4 = Não incidência"
+        codigoPaisResultado:
+          type: string
+        beneficioMunicipal:
+          $ref: '#/components/schemas/BeneficioMunicipal'
+        exigibilidadeSuspensa:
+          $ref: '#/components/schemas/ExigibilidadeSuspensa'
+        tipoImunidade:
+          type: string
+          enum: ["0", "1", "2", "3", "4"]
+        aliquota:
+          type: number
+          format: double
+          description: Alíquota do ISSQN em % (obrigatório quando município não é aderente ao ADN)
+          example: 3.0
+        retencao:
+          type: string
+          enum: ["1", "2", "3"]
+          description: "1 = Prestador | 2 = Tomador retém | 3 = Intermediário retém"
+
+    # ──── Response schemas ────────────────────────────────────────────
+
+    RespostaEmissao:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "NFS-e emitida com sucesso!"
+        chaveAcesso:
+          type: string
+          example: "41152002211222333000181900000000313026030561234567"
+        numeroNfse:
+          type: string
+          example: "31"
+        codigoVerificacao:
+          type: string
+          example: "XYZ12345"
+        dataEmissao:
+          type: string
+          format: date-time
+
+    RespostaConsulta:
+      type: object
+      properties:
+        ambiente:
+          type: string
+        id:
+          type: string
+        numeroNfse:
+          type: string
+        codigoVerificacao:
+          type: string
+        dataEmissao:
+          type: string
+          format: date-time
+        chaveAcesso:
+          type: string
+        xml:
+          type: string
+          description: XML completo da NFS-e em Base64
+
+    TaxCalcResult:
+      type: object
+      properties:
+        prestador:
+          type: object
+          properties:
+            opSimpNac:
+              type: integer
+              enum: [1, 2, 3]
+            regEspTrib:
+              type: integer
+            xNome:
+              type: string
+            cMun:
+              type: integer
+            uf:
+              type: string
+        calculado:
+          $ref: '#/components/schemas/TributacaoCalculada'
+
+    TributacaoCalculada:
+      type: object
+      properties:
+        vBC:
+          type: number
+          description: Base de cálculo do ISSQN
+        vISSQN:
+          type: number
+          description: Valor do ISSQN calculado
+        vLiq:
+          type: number
+          description: Valor líquido a receber
+        fonteAliquota:
+          type: string
+          enum: [ADN, manual, nao_informada]
+          description: Fonte de onde veio a alíquota
+        aliquotaISS:
+          type: number
+          nullable: true
+          description: Alíquota de ISSQN encontrada (null se não disponível)
+        municipioAderente:
+          type: boolean
+          description: Se o município é aderente ao ambiente nacional da Sefin
+        issqnRetidoPeloTomador:
+          type: boolean
+        retencoesFederaisAplicadas:
+          type: boolean
+        regimeTributarioDetectado:
+          type: string
+          description: Descrição do regime detectado automaticamente via CNPJ
+          example: "MEI"
+
+    PrestadorDetectado:
+      type: object
+      properties:
+        xNome:
+          type: string
+        regime:
+          type: string
+        opSimpNac:
+          type: integer
+
+    Erro:
+      type: object
+      properties:
+        message:
+          type: string
+
+    ErroDetalhado:
+      type: object
+      properties:
+        message:
+          type: string
+        details:
+          type: string
+
+    # ──── Sub-schemas reutilizáveis ───────────────────────────────────
 
     DocumentoFiscal:
       type: object
-      description: "Identificação fiscal. Preencha apenas um dos campos."
+      description: Identificação fiscal — preencha apenas um dos campos
       oneOf:
         - required: [cnpj]
-          properties: { cnpj: { type: string } }
+          properties:
+            cnpj:
+              type: string
+              description: CNPJ com 14 dígitos (somente números)
+              example: "11222333000181"
         - required: [cpf]
-          properties: { cpf: { type: string } }
+          properties:
+            cpf:
+              type: string
+              description: CPF com 11 dígitos
         - required: [nif]
-          properties: { nif: { type: string } }
+          properties:
+            nif:
+              type: string
+              description: NIF estrangeiro
         - required: [cNaoNif]
-          properties: { cNaoNif: { type: string, enum: ["0", "1", "2"] } }
+          properties:
+            cNaoNif:
+              type: string
+              enum: ["0", "1", "2"]
 
     Endereco:
       type: object
-      required: [logradouro, numero, bairro]
       properties:
-        logradouro: { type: string }
-        numero: { type: string }
-        bairro: { type: string }
-        complemento: { type: string }
-        codigoMunicipio: { type: string }
-        uf: { type: string }
-        cep: { type: string }
-        codigoPais: { type: string }
-        codigoEndPostal: { type: string }
-        cidade: { type: string }
-        estadoProvinciaRegiao: { type: string }
+        logradouro:
+          type: string
+          example: "RUA ESTACIO DE SA"
+        numero:
+          type: string
+          example: "1073"
+        bairro:
+          type: string
+          example: "VILA BOSQUE"
+        complemento:
+          type: string
+        codigoMunicipio:
+          type: string
+          example: "4115200"
+        uf:
+          type: string
+          example: "PR"
+        cep:
+          type: string
+          example: "87005020"
+        codigoPais:
+          type: string
+        codigoEndPostal:
+          type: string
+        cidade:
+          type: string
+        estadoProvinciaRegiao:
+          type: string
 
     Contato:
       type: object
       properties:
-        telefone: { type: string }
-        email: { type: string }
+        telefone:
+          type: string
+          example: "4491135801"
+        email:
+          type: string
+          example: "email@empresa.com.br"
 
-    ComercioExterior:
+    TributosFederais:
       type: object
-      required: [modoPrestacao, vinculoPrestador, tipoMoeda, valorServicoMoeda, enviarParaMDIC]
       properties:
-        modoPrestacao: { type: string, enum: ["0", "1", "2", "3", "4"] }
-        vinculoPrestador: { type: string, enum: ["0", "1", "2", "3", "4", "5", "6"] }
-        tipoMoeda: { type: string }
-        valorServicoMoeda: { type: number, format: double }
-        mecanismoApoioComexPrestador: { type: string }
-        mecanismoApoioComexTomador: { type: string }
-        movimentacaoTemporariaBens: { type: string, enum: ["0", "1", "2", "3"] }
-        numeroDI: { type: string }
-        numeroRE: { type: string }
-        enviarParaMDIC: { type: string, enum: ["0", "1"] }
+        piscofins:
+          $ref: '#/components/schemas/Piscofins'
+        valorRetidoCP:
+          type: number
+          format: double
+        valorRetidoIRRF:
+          type: number
+          format: double
+        valorRetidoCSLL:
+          type: number
+          format: double
 
-    LocacaoSublocacao:
+    Piscofins:
       type: object
-      required: [categoria, objeto, extensao, numeroPostes]
+      required: [cst]
       properties:
-        categoria: { type: string, enum: ["1", "2", "3", "4", "5"] }
-        objeto: { type: string, enum: ["1", "2", "3", "4", "5", "6"] }
-        extensao: { type: number }
-        numeroPostes: { type: number }
+        cst:
+          type: string
+          enum: ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09"]
+          description: "01 = Tributável com alíquota básica (mais comum)"
+        valorBC:
+          type: number
+          format: double
+        aliquotaPis:
+          type: number
+          format: double
+          example: 0.65
+        aliquotaCofins:
+          type: number
+          format: double
+          example: 3.00
+        valorPis:
+          type: number
+          format: double
+        valorCofins:
+          type: number
+          format: double
+        retido:
+          type: string
+          enum: ["1", "2"]
 
-    Obra:
+    TotaisTributos:
       type: object
+      description: Use apenas uma das 4 opções abaixo
       oneOf:
-        - required: [codigoObra]
-          properties: { codigoObra: { type: string } }
-        - required: [inscricaoImobiliaria]
-          properties: { inscricaoImobiliaria: { type: string } }
-        - required: [endereco]
-          properties: { endereco: { $ref: '#/components/schemas/Endereco' } }
-
-    AtividadeEvento:
-      type: object
-      required: [descricao, dataInicio, dataFim, identificacao]
-      properties:
-        descricao: { type: string }
-        dataInicio: { type: string, format: "date" }
-        dataFim: { type: string, format: "date" }
-        identificacao:
-          oneOf:
-            - required: [id]
-              properties: { id: { type: string } }
-            - required: [endereco]
-              properties: { endereco: { $ref: '#/components/schemas/Endereco' } }
-
-    ExploracaoRodoviaria:
-      type: object
-      required: [categoriaVeiculo, numeroEixos, rodagem, sentido, placa, codAcessoPedagio, codContrato]
-      properties:
-        categoriaVeiculo: { type: string, enum: ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11"] }
-        numeroEixos: { type: number }
-        rodagem: { type: string, enum: ["1", "2"] }
-        sentido: { type: string }
-        placa: { type: string }
-        codAcessoPedagio: { type: string }
-        codContrato: { type: string }
-
-    InformacoesComplementares:
-      type: object
-      properties:
-        idDocTecnico: { type: string }
-        docReferenciado: { type: string }
-        infoAdicional: { type: string }
+        - required: [valorTotal]
+          properties:
+            valorTotal:
+              type: object
+              properties:
+                fed: { type: number }
+                est: { type: number }
+                mun: { type: number }
+        - required: [percentualTotal]
+          properties:
+            percentualTotal:
+              type: object
+              properties:
+                fed: { type: number }
+                est: { type: number }
+                mun: { type: number }
+        - required: [indicador]
+          properties:
+            indicador:
+              type: string
+              enum: ["0"]
+              description: "0 = Não há informação disponível (MEI e Simples usam este)"
+        - required: [percentualSN]
+          properties:
+            percentualSN:
+              type: number
 
     DeducaoReducao:
       type: object
       oneOf:
         - required: [percentual]
-          properties: { percentual: { type: number, format: double } }
+          properties:
+            percentual: { type: number }
         - required: [valor]
-          properties: { valor: { type: number, format: double } }
+          properties:
+            valor: { type: number }
         - required: [documentos]
-          properties: { documentos: { type: array, items: { $ref: '#/components/schemas/DocumentoDeducao' } } }
+          properties:
+            documentos:
+              type: array
+              items:
+                $ref: '#/components/schemas/DocumentoDeducao'
 
     DocumentoDeducao:
       type: object
@@ -477,89 +1287,194 @@ components:
               properties: { chaveNfse: { type: string } }
             - required: [chaveNfe]
               properties: { chaveNfe: { type: string } }
-            - required: [nfseMunicipal]
-              properties: { nfseMunicipal: { type: object, properties: { codMun: { type: string }, numero: { type: string }, codVerificacao: { type: string } } } }
-            - required: [nfnfs]
-              properties: { nfnfs: { type: object, properties: { numero: { type: string }, modelo: { type: string }, serie: { type: string } } } }
             - required: [numDocFiscal]
               properties: { numDocFiscal: { type: string } }
-            - required: [numDocNaoFiscal]
-              properties: { numDocNaoFiscal: { type: string } }
-        tipoDeducao: { type: string, enum: ["1", "2", "3", "4", "5", "6", "7", "8", "99"] }
-        descricaoOutraDeducao: { type: string }
-        dataEmissao: { type: string, format: "date" }
-        valorDedutivel: { type: number, format: double }
-        valorDeducao: { type: number, format: double }
+        tipoDeducao:
+          type: string
+          enum: ["1", "2", "3", "4", "5", "6", "7", "8", "99"]
+        dataEmissao:
+          type: string
+          format: date
+        valorDedutivel:
+          type: number
+        valorDeducao:
+          type: number
         fornecedor:
           type: object
-          required: [identificacao, razaoSocial]
           properties:
-            identificacao: { $ref: '#/components/schemas/DocumentoFiscal' }
-            razaoSocial: { type: string }
+            identificacao:
+              $ref: '#/components/schemas/DocumentoFiscal'
+            razaoSocial:
+              type: string
 
     BeneficioMunicipal:
       type: object
       required: [tipo, numero]
       properties:
-        tipo: { type: string, enum: ["1", "2", "3"] }
-        numero: { type: string }
+        tipo:
+          type: string
+          enum: ["1", "2", "3"]
+        numero:
+          type: string
         reducao:
           oneOf:
             - required: [valor]
-              properties: { valor: { type: number, format: double } }
+              properties: { valor: { type: number } }
             - required: [percentual]
-              properties: { percentual: { type: number, format: double } }
+              properties: { percentual: { type: number } }
 
     ExigibilidadeSuspensa:
       type: object
       required: [tipo, numeroProcesso]
       properties:
-        tipo: { type: string, enum: ["1", "2"] }
-        numeroProcesso: { type: string }
+        tipo:
+          type: string
+          enum: ["1", "2"]
+        numeroProcesso:
+          type: string
 
-    TributosFederais:
+    ComercioExterior:
       type: object
+      required: [modoPrestacao, vinculoPrestador, tipoMoeda, valorServicoMoeda, enviarParaMDIC]
       properties:
-        piscofins:
-          $ref: '#/components/schemas/Piscofins'
-        valorRetidoCP: { type: number, format: double }
-        valorRetidoIRRF: { type: number, format: double }
-        valorRetidoCSLL: { type: number, format: double }
+        modoPrestacao:
+          type: string
+          enum: ["0", "1", "2", "3", "4"]
+        vinculoPrestador:
+          type: string
+          enum: ["0", "1", "2", "3", "4", "5", "6"]
+        tipoMoeda:
+          type: string
+          example: "USD"
+        valorServicoMoeda:
+          type: number
+        mecanismoApoioComexPrestador:
+          type: string
+        mecanismoApoioComexTomador:
+          type: string
+        movimentacaoTemporariaBens:
+          type: string
+          enum: ["0", "1", "2", "3"]
+        numeroDI:
+          type: string
+        numeroRE:
+          type: string
+        enviarParaMDIC:
+          type: string
+          enum: ["0", "1"]
 
-    Piscofins:
+    LocacaoSublocacao:
       type: object
-      required: [cst]
+      required: [categoria, objeto, extensao, numeroPostes]
       properties:
-        cst: { type: string, enum: ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09"] }
-        valorBC: { type: number, format: double }
-        aliquotaPis: { type: number, format: double }
-        aliquotaCofins: { type: number, format: double }
-        valorPis: { type: number, format: double }
-        valorCofins: { type: number, format: double }
-        retido: { type: string, enum: ["1", "2"] }
+        categoria:
+          type: string
+          enum: ["1", "2", "3", "4", "5"]
+        objeto:
+          type: string
+          enum: ["1", "2", "3", "4", "5", "6"]
+        extensao:
+          type: number
+        numeroPostes:
+          type: number
 
-    TotaisTributos:
+    Obra:
       type: object
       oneOf:
-        - required: [valorTotal]
+        - required: [codigoObra]
+          properties: { codigoObra: { type: string } }
+        - required: [inscricaoImobiliaria]
+          properties: { inscricaoImobiliaria: { type: string } }
+
+    AtividadeEvento:
+      type: object
+      required: [descricao, dataInicio, dataFim, identificacao]
+      properties:
+        descricao:
+          type: string
+        dataInicio:
+          type: string
+          format: date
+        dataFim:
+          type: string
+          format: date
+        identificacao:
+          oneOf:
+            - required: [id]
+              properties: { id: { type: string } }
+            - required: [endereco]
+              properties: { endereco: { $ref: '#/components/schemas/Endereco' } }
+
+    ExploracaoRodoviaria:
+      type: object
+      required: [categoriaVeiculo, numeroEixos, rodagem, sentido, placa, codAcessoPedagio, codContrato]
+      properties:
+        categoriaVeiculo:
+          type: string
+          enum: ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11"]
+        numeroEixos:
+          type: number
+        rodagem:
+          type: string
+          enum: ["1", "2"]
+        sentido:
+          type: string
+        placa:
+          type: string
+        codAcessoPedagio:
+          type: string
+        codContrato:
+          type: string
+
+    InformacoesComplementares:
+      type: object
+      properties:
+        idDocTecnico:
+          type: string
+        docReferenciado:
+          type: string
+        pedido:
+          type: string
+        itemPedido:
+          type: string
+        infoAdicional:
+          type: string
+
+    IbsCbs:
+      type: object
+      description: Bloco de tributos da Reforma Tributária IBS+CBS (Sefin v1.01)
+      required: [finalidadeEmissao, codigoIndicadorOperacao, indicadorDestinatario, valoresIbsCbs]
+      properties:
+        finalidadeEmissao:
+          type: string
+          example: "1"
+        indicadorConsumoFinal:
+          type: string
+        codigoIndicadorOperacao:
+          type: string
+          example: "1"
+        tipoOperacao:
+          type: string
+        chavesNfseReferenciadas:
+          type: array
+          items:
+            type: string
+        tipoEnteGovernamental:
+          type: string
+        indicadorDestinatario:
+          type: string
+          example: "1"
+        valoresIbsCbs:
+          type: object
+          required: [tributos]
           properties:
-            valorTotal:
+            tributos:
               type: object
+              required: [cst, cClassTrib]
               properties:
-                fed: { type: number, format: double }
-                est: { type: number, format: double }
-                mun: { type: number, format: double }
-        - required: [percentualTotal]
-          properties:
-            percentualTotal:
-              type: object
-              properties:
-                fed: { type: number, format: double }
-                est: { type: number, format: double }
-                mun: { type: number, format: double }
-        - required: [indicador]
-          properties:
-            indicador: { type: string, enum: ["0"] }
-        - required: [percentualSN]
-          properties:
-            percentualSN: { type: number, format: double }
+                cst:
+                  type: string
+                  example: "00"
+                cClassTrib:
+                  type: string
+                  example: "8765432"
